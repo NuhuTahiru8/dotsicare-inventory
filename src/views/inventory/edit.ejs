@@ -1,0 +1,65 @@
+﻿<%- include("../partials/head", { title: "Edit Stock" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <div>
+    <h1>Edit Stock</h1>
+    <div class="muted">
+      <%= currentBranch ? currentBranch.name + " shop" : "Current shop" %>
+      · ID <span class="mono"><%= item.id %></span>
+    </div>
+  </div>
+  <a class="btn secondary" href="/inventory">Back</a>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<form class="form" method="post" action="/inventory/<%= item.id %>/edit">
+  <div class="grid">
+    <label>
+      Model *
+      <input name="model" value="<%= item.model || "" %>" required />
+    </label>
+    <label>
+      Storage
+      <input name="storage" value="<%= item.storage || "" %>" placeholder="e.g. 128GB" />
+    </label>
+    <label>
+      Color
+      <input name="color" value="<%= item.color || "" %>" placeholder="e.g. Black" />
+    </label>
+    <label>
+      Condition *
+      <select name="condition" required>
+        <option value="">Select</option>
+        <option <%= item.condition === "New" ? "selected" : "" %>>New</option>
+        <option <%= item.condition === "Used" ? "selected" : "" %>>Used</option>
+      </select>
+    </label>
+    <label>
+      Cost Price (&#8373;) *
+      <input name="cost_price" type="number" min="0" value="<%= item.cost_price ?? "" %>" required />
+    </label>
+    <label>
+      Sale Price (&#8373;) *
+      <input name="sale_price" type="number" min="0" value="<%= item.sale_price ?? "" %>" required />
+    </label>
+    <label>
+      IMEI 1 *
+      <input name="imei1" value="<%= item.imei1 || "" %>" required />
+    </label>
+    <label>
+      IMEI 2
+      <input name="imei2" value="<%= item.imei2 || "" %>" />
+    </label>
+  </div>
+
+  <div class="form-footer">
+    <button class="btn" type="submit">Save Changes</button>
+    <span class="pill <%= item.status === "InStock" ? "ok" : "muted" %>"><%= item.status %></span>
+  </div>
+</form>
+
+<%- include("../partials/foot") %>

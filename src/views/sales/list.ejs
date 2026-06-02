@@ -1,0 +1,47 @@
+﻿<%- include("../partials/head", { title: "Sales" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Sales</h1>
+  <a class="btn" href="/sales/new">New Sale</a>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Invoice</th>
+      <th>Customer</th>
+      <th>Device</th>
+      <th>Type</th>
+      <th>Salesperson</th>
+      <th>Amount</th>
+      <th>Date</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const s of sales) { %>
+      <tr>
+        <td class="mono"><%= s.invoice_no %></td>
+        <td><%= s.customer_name %></td>
+        <td><%= s.device_model %></td>
+        <%
+          const typeLabel =
+            s.sale_type === "SwapFull"
+              ? "Swap (Full)"
+              : s.sale_type === "SwapInstallment"
+                ? "Swap (Installment)"
+                : s.sale_type;
+          const typePill = s.sale_type.includes("Installment") ? "warn" : "ok";
+        %>
+        <td><span class="pill <%= typePill %>"><%= typeLabel %></span></td>
+        <td><%= s.salesperson_name || "Unknown" %></td>
+        <td>&#8373; <%= currency(s.payable ?? Math.max(0, s.sale_price - s.discount)) %></td>
+        <td><%= (s.created_at || "").slice(0, 10) %></td>
+        <td><a class="btn small secondary" href="/sales/<%= s.id %>">View</a></td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include("../partials/foot") %>

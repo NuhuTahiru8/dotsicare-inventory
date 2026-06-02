@@ -1,0 +1,129 @@
+﻿<%- include("../partials/head", { title: "New Sale" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>New Sale</h1>
+  <a class="btn secondary" href="/sales">Back</a>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<form class="form" method="post" action="/sales/new">
+  <div class="grid">
+    <label>
+      Customer *
+      <select name="customer_id" required>
+        <option value="">Select customer</option>
+        <% for (const c of customers) { %>
+          <option value="<%= c.id %>"><%= c.name %> (<%= c.phone %>)</option>
+        <% } %>
+      </select>
+    </label>
+
+    <label>
+      Device (In Stock) *
+      <select name="device_id" required>
+        <option value="">Select device</option>
+        <% for (const d of devices) { %>
+          <option value="<%= d.id %>"><%= d.model %> - <%= [d.storage, d.color].filter(Boolean).join(" / ") %> - <%= d.imeis %></option>
+        <% } %>
+      </select>
+    </label>
+
+    <label>
+      Sale Type *
+      <select id="saleType" name="sale_type" required>
+        <option value="">Select</option>
+        <option value="Full">Full</option>
+        <option value="Installment">Installment</option>
+        <option value="SwapFull">Swap (Full)</option>
+        <option value="SwapInstallment">Swap (Installment)</option>
+      </select>
+    </label>
+
+    <label>
+      Sale Price (&#8373;) *
+      <input name="sale_price" type="number" min="0" required />
+    </label>
+
+    <label>
+      Discount (&#8373;)
+      <input name="discount" type="number" min="0" value="0" />
+    </label>
+
+    <label>
+      Down Payment (&#8373;)
+      <input name="down_payment" type="number" min="0" value="0" />
+    </label>
+
+    <label>
+      Payment Method
+      <select name="payment_method">
+        <option>Cash</option>
+        <option>Transfer</option>
+        <option>POS</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="swapFields" class="panel" style="display:none">
+    <h2>Trade-in (Swap)</h2>
+    <div class="grid">
+      <label>
+        Trade-in Model *
+        <input name="trade_model" />
+      </label>
+      <label>
+        Trade-in Storage
+        <input name="trade_storage" placeholder="e.g. 128GB" />
+      </label>
+      <label>
+        Trade-in Color
+        <input name="trade_color" placeholder="e.g. Black" />
+      </label>
+      <label>
+        Trade-in Condition *
+        <select name="trade_condition">
+          <option value="">Select</option>
+          <option>New</option>
+          <option>Used</option>
+        </select>
+      </label>
+      <label>
+        Trade-in Value (&#8373;) *
+        <input name="trade_in_value" type="number" min="0" />
+      </label>
+      <label>
+        Trade-in IMEI 1 *
+        <input name="trade_imei1" />
+      </label>
+      <label>
+        Trade-in IMEI 2
+        <input name="trade_imei2" />
+      </label>
+    </div>
+    <p class="hint">Swap reduces what the customer must pay: Payable = Sale - Discount - Trade-in Value.</p>
+  </div>
+
+  <button class="btn" type="submit">Create Sale</button>
+</form>
+
+<p class="hint">For installment: down payment is recorded immediately and due date is set to 3 months.</p>
+
+<script>
+  (function () {
+    var sel = document.getElementById("saleType");
+    var swap = document.getElementById("swapFields");
+    function sync() {
+      var v = (sel && sel.value) || "";
+      var isSwap = v === "SwapFull" || v === "SwapInstallment";
+      if (swap) swap.style.display = isSwap ? "block" : "none";
+    }
+    if (sel) sel.addEventListener("change", sync);
+    sync();
+  })();
+</script>
+
+<%- include("../partials/foot") %>

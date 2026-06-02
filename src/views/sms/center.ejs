@@ -1,0 +1,97 @@
+﻿<%- include("../partials/head", { title: "Debt SMS" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Debt SMS Center</h1>
+  <div class="row-actions">
+    <a class="btn secondary" href="/sms/templates">Templates</a>
+    <a class="btn secondary" href="/sms/logs">Logs</a>
+  </div>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<form class="form" method="post" action="/sms/send">
+  <input type="hidden" name="filter" value="<%= filter %>" />
+
+  <div class="grid">
+    <label>
+      Recipient Filter
+      <select name="filter" onchange="location.href='/sms?filter='+encodeURIComponent(this.value)+'&template_id='+encodeURIComponent(document.getElementById('templateSelect').value||'')">
+        <option value="overdue" <%= filter === "overdue" ? "selected" : "" %>>Overdue</option>
+        <option value="due-soon" <%= filter === "due-soon" ? "selected" : "" %>>Due Soon (7 days)</option>
+        <option value="all-active" <%= filter === "all-active" ? "selected" : "" %>>All Active</option>
+      </select>
+    </label>
+
+    <label>
+      Use Template
+      <select id="templateSelect" name="template_id" onchange="location.href='/sms?filter='+encodeURIComponent('<%= filter %>')+'&template_id='+encodeURIComponent(this.value)">
+        <option value="">None</option>
+        <% for (const t of templates) { %>
+          <option value="<%= t.id %>" <%= selectedTemplateId === t.id ? "selected" : "" %>><%= t.name %></option>
+        <% } %>
+      </select>
+    </label>
+
+    <label class="span-2">
+      Message (Sender ID: <span class="mono"><%= senderId %></span>) *
+      <textarea name="message" rows="4" required placeholder="Type the reminder message"><%= message || "" %></textarea>
+    </label>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <h2>Recipients (<%= recipients.length %>)</h2>
+      <div class="muted">Select who should receive this message.</div>
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Customer</th>
+          <th>Phone</th>
+          <th>Invoice</th>
+          <th>Balance</th>
+          <th>Due</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const r of recipients) { %>
+          <tr>
+            <td><input type="checkbox" name="recipient" value="<%= r.sale_id %>" /></td>
+            <td><%= r.name %></td>
+            <td class="mono"><%= r.phone %></td>
+            <td class="mono"><%= r.invoice_no %></td>
+            <td>&#8373; <%= r.balance %></td>
+            <td><%= r.due_date_short %></td>
+            <td><span class="pill <%= r.status === "Overdue" ? "danger" : "warn" %>"><%= r.status %></span></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <div class="grid">
+      <label>
+        <span class="inline">
+          <input type="checkbox" name="save_as_template" />
+          Save as template
+        </span>
+      </label>
+      <label>
+        Template Name
+        <input name="template_name" placeholder="e.g. Overdue Reminder" />
+      </label>
+    </div>
+  </div>
+
+  <button class="btn" type="submit">Send SMS</button>
+</form>
+
+<%- include("../partials/foot") %>

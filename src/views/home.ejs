@@ -1,0 +1,101 @@
+﻿<%- include("partials/head", { title: "Dotsicare - Home" }) %>
+<%- include("partials/nav") %>
+
+<div class="hero">
+  <div>
+    <div class="auth-kicker">Branch Workspace</div>
+    <h1><%= currentBranch ? currentBranch.name + " Dashboard" : "Dashboard" %></h1>
+    <p class="muted">Inventory, customers, sales, installments, and SMS are separated by shop.</p>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-title">Items Left</div>
+    <div class="card-value"><%= dashboard?.in_stock || 0 %></div>
+    <div class="card-actions"><a class="btn" href="/inventory">View Inventory</a></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Items Sold</div>
+    <div class="card-value"><%= dashboard?.sold || 0 %></div>
+    <div class="card-actions"><a class="btn" href="/sales">View Sales</a></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Gross Profit</div>
+    <div class="card-value money">&#8373; <%= currency(dashboard?.gross_profit || 0) %></div>
+    <div class="card-actions">
+      <% if (currentUser && currentUser.role === "Admin") { %>
+        <a class="btn" href="/reports/profit">Profit Report</a>
+      <% } else { %>
+        <span class="pill ok">Before expenses</span>
+      <% } %>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Sales Value</div>
+    <div class="card-value money">&#8373; <%= currency(dashboard?.sales_value || 0) %></div>
+    <div class="card-actions"><span class="pill muted">After discounts</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Stock Value Left</div>
+    <div class="card-value money">&#8373; <%= currency(dashboard?.inventory_value || 0) %></div>
+    <div class="card-actions"><span class="pill muted">Cost value</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Overdue Installments</div>
+    <div class="card-value"><%= overdueCount || 0 %></div>
+    <div class="card-actions"><a class="btn" href="/installments">Installments</a></div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="panel">
+    <h2>Profit Snapshot</h2>
+    <dl class="dl">
+      <div><dt>Sales value</dt><dd>&#8373; <%= currency(dashboard?.sales_value || 0) %></dd></div>
+      <div><dt>Cost of sold phones</dt><dd>&#8373; <%= currency(dashboard?.sold_cost || 0) %></dd></div>
+      <div><dt>Trade-in credit</dt><dd>&#8373; <%= currency(dashboard?.trade_in_credit || 0) %></dd></div>
+      <div><dt>Customer payable after trade-ins</dt><dd>&#8373; <%= currency(dashboard?.cash_payable || 0) %></dd></div>
+      <div><dt>Installment balance</dt><dd>&#8373; <%= currency(dashboard?.installment_balance || 0) %></dd></div>
+    </dl>
+    <p class="hint">Gross profit uses sales value minus the cost of sold phones. Trade-ins stay as stock value until resold.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Stock Batches</h2>
+    <table class="table compact">
+      <thead>
+        <tr>
+          <th>Batch</th>
+          <th>Total</th>
+          <th>Left</th>
+          <th>Sold</th>
+          <th>Value Left</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const batch of dashboard?.batches || []) { %>
+          <tr>
+            <td><%= batch.name %></td>
+            <td><%= batch.total_items || 0 %></td>
+            <td><%= batch.in_stock || 0 %></td>
+            <td><%= batch.sold || 0 %></td>
+            <td>&#8373; <%= currency(batch.inventory_value || 0) %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+    <p class="hint">Use batches like “May 2026 Stock” so new stock does not mix with old stock.</p>
+  </div>
+</div>
+
+<div class="quick">
+  <a class="btn" href="/customers/new">Add Customer</a>
+  <a class="btn" href="/sales/new">New Sale</a>
+  <% if (currentUser && currentUser.role === "Admin") { %>
+    <a class="btn" href="/inventory/new">Add Stock</a>
+    <a class="btn" href="/sms">Send Debt SMS</a>
+  <% } %>
+</div>
+
+<%- include("partials/foot") %>

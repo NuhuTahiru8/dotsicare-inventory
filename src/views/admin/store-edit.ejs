@@ -1,0 +1,134 @@
+<%- include("../partials/head", { title: "Edit Website Product" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <div>
+    <h1>Edit Website Product</h1>
+    <div class="muted">Update the public product page. Prices are still not shown.</div>
+  </div>
+  <div class="row-actions">
+    <a class="btn secondary" href="/store/<%= item.slug %>" target="_blank" rel="noopener">View Product</a>
+    <a class="btn secondary" href="/admin/store">Back</a>
+  </div>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<form class="form" method="post" action="/admin/store/<%= item.id %>/edit">
+  <div class="grid">
+    <label>
+      Product Name *
+      <input name="title" value="<%= item.title || "" %>" required />
+    </label>
+    <label>
+      Category *
+      <select name="category" required>
+        <% for (const category of categories) { %>
+          <option value="<%= category %>" <%= item.category === category ? "selected" : "" %>><%= category %></option>
+        <% } %>
+      </select>
+    </label>
+    <label>
+      WhatsApp Number
+      <input name="whatsapp_phone" value="<%= item.whatsapp_phone || "" %>" placeholder="233XXXXXXXXX" />
+    </label>
+    <label class="span-2">
+      Specs
+      <textarea name="specs" rows="4"><%= item.specs || "" %></textarea>
+    </label>
+    <label class="span-2">
+      Product Info
+      <textarea name="description" rows="4"><%= item.description || "" %></textarea>
+    </label>
+    <label class="span-2">
+      Images
+      <div class="upload-zone" id="uploadZone">
+        <div class="upload-zone-hint">
+          <span class="upload-icon">&#xe287;</span>
+          <strong>Drop images here</strong>
+          <span class="muted">or click to browse &middot; JPG, PNG, WebP, GIF &middot; max 20MB each</span>
+        </div>
+        <input type="file" name="images" accept="image/*" multiple hidden id="uploadInput" />
+      </div>
+      <div class="upload-preview-grid" id="uploadPreview"></div>
+    </label>
+    <label class="span-2">
+      Image Links *
+      <textarea name="image_urls" id="imageUrlsField" rows="4" required><%= item.image_urls || "" %></textarea>
+    </label>
+  </div>
+  <div class="form-footer">
+    <label class="inline">
+      <input name="featured" type="checkbox" <%= item.featured ? "checked" : "" %> />
+      Best seller
+    </label>
+    <label class="inline">
+      <input name="active" type="checkbox" <%= item.active ? "checked" : "" %> />
+      Show on website
+    </label>
+    <button class="btn" type="submit">Save Changes</button>
+  </div>
+</form>
+
+<script>
+(function () {
+  var uploadZone = document.getElementById("uploadZone");
+  var uploadInput = document.getElementById("uploadInput");
+  var imageUrlsField = document.getElementById("imageUrlsField");
+  var previewGrid = document.getElementById("uploadPreview");
+
+  if (!uploadZone || !uploadInput || !imageUrlsField) return;
+
+  uploadZone.addEventListener("click", function () { uploadInput.click(); });
+  uploadZone.addEventListener("dragover", function (e) { e.preventDefault(); uploadZone.classList.add("drag-over"); });
+  uploadZone.addEventListener("dragleave", function () { uploadZone.classList.remove("drag-over"); });
+  uploadZone.addEventListener("drop", function (e) {
+    e.preventDefault();
+    uploadZone.classList.remove("drag-over");
+    handleFiles(e.dataTransfer.files);
+  });
+  uploadInput.addEventListener("change", function () { handleFiles(uploadInput.files); uploadInput.value = ""; });
+
+  function handleFiles(files) {
+    var formData = new FormData();
+    for (var i = 0; i < files.length; i++) formData.append("images", files[i]);
+    uploadZone.querySelector(".upload-zone-hint").innerHTML = '<strong>Uploading...</strong>';
+    fetch("/admin/store/upload", { method: "POST", body: formData })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var current = imageUrlsField.value.trim();
+        var lines = current ? current.split("\n").filter(Boolean) : [];
+        var newLines = lines.concat(data.urls);
+        imageUrlsField.value = newLines.join("\n");
+        renderPreviews(newLines);
+        uploadZone.querySelector(".upload-zone-hint").innerHTML =
+          '<span class="upload-icon">&#xe287;</span><strong>Drop images here</strong><span class="muted">or click to browse &middot; JPG, PNG, WebP, GIF &middot; max 20MB each</span>';
+      })
+      .catch(function () {
+        uploadZone.querySelector(".upload-zone-hint").innerHTML =
+          '<span class="upload-icon">&#xe287;</span><strong>Upload failed</strong><span class="muted">try again</span>';
+      });
+  }
+
+  function renderPreviews(urls) {
+    previewGrid.innerHTML = "";
+    urls.forEach(function (url) {
+      var img = document.createElement("img");
+      img.src = url;
+      img.alt = "Preview";
+      img.className = "upload-preview-thumb";
+      previewGrid.appendChild(img);
+    });
+  }
+
+  imageUrlsField.addEventListener("input", function () {
+    renderPreviews(imageUrlsField.value.trim().split("\n").filter(Boolean));
+  });
+
+  renderPreviews(imageUrlsField.value.trim().split("\n").filter(Boolean));
+})();
+</script>
+
+<%- include("../partials/foot") %>

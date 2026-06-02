@@ -1,0 +1,38 @@
+<%- include("../partials/head", { title: "SMS Logs" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>SMS Logs</h1>
+  <a class="btn secondary" href="/sms">Back</a>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>To</th>
+      <th>Customer</th>
+      <th>Invoice</th>
+      <th>Sender</th>
+      <th>Status</th>
+      <th>Sent At</th>
+      <th>Message</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const l of logs) { %>
+      <tr>
+        <td><%= l.id %></td>
+        <td class="mono"><%= l.to_phone %></td>
+        <td><%= l.customer_name || "" %></td>
+        <td class="mono"><%= l.invoice_no || "" %></td>
+        <td class="mono"><%= l.sender_id %></td>
+        <td><span class="pill <%= l.status === "Sent" ? "ok" : l.status === "Simulated" ? "muted" : "danger" %>"><%= l.status %></span></td>
+        <td><%= (l.sent_at || l.created_at || "").slice(0, 19).replace("T", " ") %></td>
+        <td class="mono"><%= l.body %></td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include("../partials/foot") %>

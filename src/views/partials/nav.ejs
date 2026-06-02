@@ -1,0 +1,55 @@
+<header class="topbar">
+  <div class="container topbar-inner">
+    <a class="brand" href="<%= currentUser ? "/dashboard" : "/" %>">
+      <span class="brand-mark">
+        <img class="brand-logo" src="/public/logo.png" alt="Dotsicare logo" />
+      </span>
+      <span>
+        <strong>Dotsicare</strong>
+        <% if (currentBranch) { %>
+          <small><%= currentBranch.name %> Shop</small>
+        <% } else { %>
+          <small>Inventory Suite</small>
+        <% } %>
+      </span>
+    </a>
+    <% if (currentUser) { %>
+      <nav class="nav">
+        <% if (currentUser.role === "Admin") { %>
+          <a href="/admin">Admin</a>
+          <a href="/admin/store">Website</a>
+          <a href="/inventory">Inventory</a>
+          <a href="/customers">Customers</a>
+          <a href="/sales">Sales</a>
+          <a href="/reports/profit">Profit</a>
+          <a href="/installments">Installments</a>
+          <a href="/sms">Debt SMS</a>
+        <% } else { %>
+          <a href="/sales">Sales</a>
+          <a href="/customers">Customers</a>
+          <a href="/installments">Installments</a>
+        <% } %>
+      </nav>
+      <div class="userbox">
+        <% if (currentBranch) { %>
+          <form class="branch-switch" method="post" action="/branch">
+            <select name="branch" onchange="this.form.submit()" aria-label="Switch shop">
+              <% for (const branch of branches) { %>
+                <option value="<%= branch.key %>" <%= currentBranch.key === branch.key ? "selected" : "" %>><%= branch.name %></option>
+              <% } %>
+            </select>
+          </form>
+        <% } %>
+        <div class="userbox-name"><%= currentUser.name %> (<%= currentUser.role %>)</div>
+        <form method="post" action="/logout">
+          <button class="btn small secondary" type="submit">Logout</button>
+        </form>
+      </div>
+    <% } else { %>
+      <nav class="nav">
+        <a href="/login">Login</a>
+      </nav>
+    <% } %>
+  </div>
+</header>
+<main class="container">

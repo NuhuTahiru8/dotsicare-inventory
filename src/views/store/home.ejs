@@ -1,0 +1,237 @@
+<%- include("../partials/head", {
+  title,
+  description,
+  keywords,
+  canonical,
+  ogTitle,
+  ogImage,
+  bodyClass,
+  jsonLd
+}) %>
+
+<div class="store-splash" id="storeSplash">
+  <img src="/public/logo.png" alt="Dotsicare logo" />
+  <div>Dotsicare</div>
+</div>
+
+<header class="store-hero">
+  <nav class="store-nav">
+    <a class="store-brand" href="/">
+      <img src="/public/logo.png" alt="Dotsicare logo" />
+      <span>
+        <strong>Dotsicare</strong>
+        <small>Phone shop in Konongo, Ghana</small>
+      </span>
+    </a>
+    <div class="store-nav-actions">
+      <% if (currentUser) { %>
+        <a class="btn secondary" href="/dashboard">Staff Dashboard</a>
+      <% } %>
+    </div>
+  </nav>
+
+  <div class="store-hero-grid">
+    <div>
+      <div class="auth-kicker">Trusted Phone Shop</div>
+      <h1>Find your next phone. Ask the price privately on WhatsApp.</h1>
+      <p>
+        Browse iPhones, Android phones, chargers, power banks, PlayStation consoles, smart watches,
+        and accessories from Dotsicare. Prices are not shown online — tap WhatsApp to ask availability.
+      </p>
+      <div class="store-hero-actions">
+        <a class="btn" href="#discover">Discover Products</a>
+        <% if (whatsappPhone) { %>
+          <a class="btn secondary" href="https://wa.me/<%= whatsappPhone %>" target="_blank" rel="noopener">Chat Seller</a>
+        <% } %>
+      </div>
+    </div>
+    <div class="store-hero-device">
+      <img src="<%= listings[0]?.first_image || "/public/logo.png" %>" alt="Featured phone at Dotsicare" />
+    </div>
+  </div>
+</header>
+
+<section class="store-section">
+  <div class="store-section-head">
+    <div>
+      <div class="auth-kicker">Shop By Category</div>
+      <h2>Categories</h2>
+    </div>
+    <form class="store-branch-filter" method="get" action="/">
+      <input type="hidden" name="branch" value="<%= selectedBranch %>" />
+      <% if (selectedCategory) { %>
+        <input type="hidden" name="category" value="<%= selectedCategory %>" />
+      <% } %>
+    </form>
+  </div>
+
+  <div class="category-rail" aria-label="Product categories">
+    <a class="category-bubble <%= !selectedCategory ? "active" : "" %>" href="/?branch=<%= selectedBranch %>">
+      <span><img src="/public/logo.png" alt="All products" /></span>
+      <strong>All</strong>
+    </a>
+    <% for (const category of categories) { %>
+      <a class="category-bubble <%= selectedCategory === category.name ? "active" : "" %>" href="/?branch=<%= selectedBranch %>&category=<%= encodeURIComponent(category.name) %>">
+        <span><img src="<%= category.image %>" alt="<%= category.name %>" /></span>
+        <strong><%= category.name %></strong>
+      </a>
+    <% } %>
+  </div>
+</section>
+
+<section id="discover" class="store-section">
+  <div class="store-section-head">
+    <div>
+      <div class="auth-kicker"><%= selectedCategory || "Best Sellers" %></div>
+      <h2>Discover</h2>
+    </div>
+    <% if (selectedCategory) { %>
+      <a class="btn secondary" href="/?branch=<%= selectedBranch %>">View All</a>
+    <% } %>
+  </div>
+
+  <div class="store-grid">
+    <% for (const item of listings) { %>
+      <article class="store-card">
+        <% if (item.featured) { %>
+          <span class="store-badge">Best Seller</span>
+        <% } %>
+        <button
+          class="store-card-image js-gallery-open"
+          type="button"
+          data-title="<%= item.title %>"
+          data-images="<%= jsonAttr(item.images) %>"
+          data-whatsapp="<%= item.whatsapp_url %>"
+        >
+          <img src="<%= item.first_image %>" alt="<%= item.title %>" />
+        </button>
+        <div class="store-card-body">
+          <a class="store-card-title" href="<%= item.url %>"><%= item.title %></a>
+          <div class="store-card-meta"><%= item.category %> · <%= item.branch %></div>
+          <% if (item.specs_lines.length) { %>
+            <div class="store-specs"><%= item.specs_lines.slice(0, 2).join(" · ") %></div>
+          <% } %>
+          <div class="store-card-actions">
+            <a class="btn small secondary" href="<%= item.url %>">View Gallery</a>
+            <% if (item.whatsapp_url) { %>
+              <a class="btn small" href="<%= item.whatsapp_url %>" target="_blank" rel="noopener">Ask Price</a>
+            <% } %>
+          </div>
+        </div>
+      </article>
+    <% } %>
+
+    <% if (listings.length === 0) { %>
+      <div class="store-empty">
+        <img src="/public/logo.png" alt="Dotsicare logo" />
+        <h2>No products posted yet</h2>
+        <p class="muted">Admin can add phones and accessories from Website Manager.</p>
+        <% if (currentUser && currentUser.role === "Admin") { %>
+          <a class="btn" href="/admin/store">Post First Product</a>
+        <% } %>
+      </div>
+    <% } %>
+  </div>
+</section>
+
+<footer class="store-footer">
+  <img src="/public/logo.png" alt="Dotsicare logo" />
+  <div>
+    <strong>Dotsicare</strong>
+    <span>Best iPhone and phone shop in Konongo, Ghana.</span>
+  </div>
+  <a class="store-admin-trigger" href="/login">Admin</a>
+</footer>
+
+<div class="store-lightbox" id="storeLightbox" hidden>
+  <button class="lightbox-close" type="button" aria-label="Close gallery">×</button>
+  <div class="lightbox-card">
+    <img id="lightboxImage" src="/public/logo.png" alt="Product gallery image" />
+    <h3 id="lightboxTitle">Product Gallery</h3>
+    <div class="lightbox-thumbs" id="lightboxThumbs"></div>
+    <a class="btn" id="lightboxWhatsapp" href="#" target="_blank" rel="noopener">Ask Price on WhatsApp</a>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var splash = document.getElementById("storeSplash");
+    if (splash) {
+      var seen = sessionStorage.getItem("dotsicare_store_seen");
+      if (seen) {
+        splash.remove();
+      } else {
+        sessionStorage.setItem("dotsicare_store_seen", "1");
+        setTimeout(function () {
+          splash.classList.add("hide");
+          setTimeout(function () { splash.remove(); }, 450);
+        }, 900);
+      }
+    }
+
+    function appendImageToLink(baseUrl, imageSrc) {
+      if (!baseUrl) return "";
+      var absoluteSrc = new URL(imageSrc, window.location.origin).href;
+      return baseUrl + encodeURIComponent("\nSelected image: " + absoluteSrc);
+    }
+
+    var lightbox = document.getElementById("storeLightbox");
+    var image = document.getElementById("lightboxImage");
+    var title = document.getElementById("lightboxTitle");
+    var thumbs = document.getElementById("lightboxThumbs");
+    var whatsapp = document.getElementById("lightboxWhatsapp");
+
+    function openGallery(button) {
+      var images = [];
+      try {
+        images = JSON.parse(decodeURIComponent(button.dataset.images || "%5B%5D"));
+      } catch (e) {
+        images = [];
+      }
+      if (!images.length) images = ["/public/logo.png"];
+      var itemTitle = button.dataset.title || "Product Gallery";
+      var whatsappBaseUrl = button.dataset.whatsapp || "";
+      title.textContent = itemTitle;
+      thumbs.innerHTML = "";
+      function choose(src, index) {
+        image.src = src;
+        image.alt = itemTitle + " image " + (index + 1);
+        Array.prototype.forEach.call(thumbs.children, function (thumb, thumbIndex) {
+          thumb.classList.toggle("active", thumbIndex === index);
+        });
+        if (whatsappBaseUrl) {
+          whatsapp.href = appendImageToLink(whatsappBaseUrl, src);
+          whatsapp.hidden = false;
+        } else {
+          whatsapp.hidden = true;
+        }
+      }
+      images.forEach(function (src, index) {
+        var thumb = document.createElement("button");
+        thumb.type = "button";
+        thumb.innerHTML = '<img src="' + src.replace(/"/g, "&quot;") + '" alt="">';
+        thumb.addEventListener("click", function () { choose(src, index); });
+        thumbs.appendChild(thumb);
+      });
+      choose(images[0], 0);
+      lightbox.hidden = false;
+      document.body.classList.add("lightbox-open");
+    }
+
+    document.querySelectorAll(".js-gallery-open").forEach(function (button) {
+      button.addEventListener("click", function () { openGallery(button); });
+    });
+    document.querySelector(".lightbox-close")?.addEventListener("click", function () {
+      lightbox.hidden = true;
+      document.body.classList.remove("lightbox-open");
+    });
+    lightbox?.addEventListener("click", function (event) {
+      if (event.target === lightbox) {
+        lightbox.hidden = true;
+        document.body.classList.remove("lightbox-open");
+      }
+    });
+  })();
+</script>
+
+<%- include("../partials/foot") %>

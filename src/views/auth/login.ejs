@@ -1,0 +1,49 @@
+<%- include("../partials/head", { title: "Login" }) %>
+<%- include("../partials/nav") %>
+
+<div class="auth">
+  <div class="auth-card">
+    <img class="auth-logo" src="/public/logo.png" alt="Dotsicare logo" />
+    <div class="auth-kicker">Dotsicare Inventory</div>
+    <h1>Choose your shop</h1>
+    <div class="muted">Pick the branch you are entering, then sign in.</div>
+
+    <% if (error) { %>
+      <div class="alert"><%= error %></div>
+    <% } %>
+
+    <form class="form" method="post" action="/login">
+      <div class="branch-picker">
+        <% for (const branch of branches) { %>
+          <label class="branch-option">
+            <input
+              type="radio"
+              name="branch"
+              value="<%= branch.key %>"
+              <%= selectedBranch === branch.key ? "checked" : "" %>
+              required
+            />
+            <span>
+              <strong><%= branch.name %></strong>
+              <small>Independent shop workspace</small>
+            </span>
+          </label>
+        <% } %>
+      </div>
+
+      <div class="grid">
+        <label>
+          Username *
+          <input name="name" required />
+        </label>
+        <label>
+          Password *
+          <input name="password" type="password" required />
+        </label>
+      </div>
+      <button class="btn auth-submit" type="submit">Enter Shop</button>
+    </form>
+  </div>
+</div>
+
+<%- include("../partials/foot") %>

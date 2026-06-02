@@ -1,0 +1,38 @@
+<%- include("../partials/head", { title: "Customers" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Customers</h1>
+  <a class="btn" href="/customers/new">Add Customer</a>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Name</th>
+      <th>Phone</th>
+      <th>ID Held</th>
+      <th>Created</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const c of customers) { %>
+      <tr>
+        <td><%= c.id %></td>
+        <td><%= c.name %></td>
+        <td class="mono"><%= c.phone %></td>
+        <td>
+          <% if (c.id_held) { %>
+            <span class="pill warn">Held</span>
+          <% } else { %>
+            <span class="pill ok">No</span>
+          <% } %>
+        </td>
+        <td><%= (c.created_at || "").slice(0, 10) %></td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include("../partials/foot") %>

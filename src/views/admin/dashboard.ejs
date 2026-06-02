@@ -1,0 +1,116 @@
+﻿<%- include("../partials/head", { title: "Admin Dashboard" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <div>
+    <h1>Admin Dashboard</h1>
+    <% if (currentBranch) { %>
+      <div class="muted">Managing <%= currentBranch.name %> as an independent shop.</div>
+    <% } %>
+  </div>
+  <div class="row-actions">
+    <a class="btn secondary" href="/admin/users">Manage Users</a>
+    <a class="btn secondary" href="/inventory">View Inventory</a>
+  </div>
+</div>
+
+<% if (ok) { %>
+  <div class="panel">
+    <div class="pill ok">Stock added successfully</div>
+  </div>
+<% } %>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<div class="split">
+  <div class="panel">
+    <h2>Add Product To Stock</h2>
+    <form class="form" method="post" action="/admin/stock">
+      <div class="grid">
+        <label>
+          Model *
+          <input name="model" required />
+        </label>
+        <label>
+          Stock Batch / Lot
+          <input name="stock_batch_name" list="stockBatches" value="<%= defaultBatchName || "Opening Stock" %>" placeholder="e.g. May 2026 Stock" />
+        </label>
+        <label>
+          Storage
+          <input name="storage" placeholder="e.g. 128GB" />
+        </label>
+        <label>
+          Color
+          <input name="color" placeholder="e.g. Black" />
+        </label>
+        <label>
+          Condition *
+          <select name="condition" required>
+            <option value="">Select</option>
+            <option>New</option>
+            <option>Used</option>
+          </select>
+        </label>
+        <label>
+          Cost Price (&#8373;) *
+          <input name="cost_price" type="number" min="0" required />
+        </label>
+        <label>
+          Sale Price (&#8373;) *
+          <input name="sale_price" type="number" min="0" required />
+        </label>
+        <label>
+          IMEI 1 *
+          <input name="imei1" required />
+        </label>
+        <label>
+          IMEI 2
+          <input name="imei2" />
+        </label>
+      </div>
+      <datalist id="stockBatches">
+        <% for (const batch of batches || []) { %>
+          <option value="<%= batch.name %>"></option>
+        <% } %>
+      </datalist>
+      <p class="hint">Batch keeps new stock separate from old stock in reports.</p>
+      <button class="btn" type="submit">Add To Stock</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Recent Stock</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Model</th>
+          <th>Batch</th>
+          <th>IMEI(s)</th>
+          <th>Status</th>
+          <th>Cost</th>
+          <th>Sale</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const d of recentStock) { %>
+          <tr>
+            <td><%= d.id %></td>
+            <td><%= d.model %></td>
+            <td><%= d.stock_batch_name || "Opening Stock" %></td>
+            <td class="mono"><%= d.imeis || "" %></td>
+            <td><span class="pill <%= d.status === "InStock" ? "ok" : "muted" %>"><%= d.status %></span></td>
+            <td>&#8373; <%= currency(d.cost_price) %></td>
+            <td>&#8373; <%= currency(d.sale_price) %></td>
+            <td><a class="btn small secondary" href="/inventory/<%= d.id %>/edit">Edit</a></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include("../partials/foot") %>

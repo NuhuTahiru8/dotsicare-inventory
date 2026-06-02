@@ -1,0 +1,150 @@
+﻿<%- include("../partials/head", { title: "Profit Report" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <div>
+    <h1>Profit Report</h1>
+    <% if (currentBranch) { %>
+      <div class="muted"><%= currentBranch.name %> shop sales only</div>
+    <% } %>
+  </div>
+  <a class="btn secondary" href="/dashboard">Dashboard</a>
+</div>
+
+<form class="panel report-filter" method="get" action="/reports/profit">
+  <label>
+    From
+    <input name="from" type="date" value="<%= report.filters.from || "" %>" />
+  </label>
+  <label>
+    To
+    <input name="to" type="date" value="<%= report.filters.to || "" %>" />
+  </label>
+  <div class="filter-actions">
+    <button class="btn" type="submit">Apply</button>
+    <a class="btn secondary" href="/reports/profit">All Time</a>
+  </div>
+</form>
+
+<div class="cards profit-cards">
+  <div class="card">
+    <div class="card-title">Gross Profit</div>
+    <div class="card-value money">&#8373; <%= currency(report.summary.gross_profit) %></div>
+    <div class="card-actions"><span class="pill ok"><%= report.summary.margin.toFixed(1) %>% margin</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Net Sales</div>
+    <div class="card-value money">&#8373; <%= currency(report.summary.net_sales) %></div>
+    <div class="card-actions"><span class="pill muted"><%= report.summary.sales_count %> sale<%= report.summary.sales_count === 1 ? "" : "s" %></span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Stock Cost Sold</div>
+    <div class="card-value money">&#8373; <%= currency(report.summary.device_cost) %></div>
+    <div class="card-actions"><span class="pill muted">Cost basis</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Cash Collected</div>
+    <div class="card-value money">&#8373; <%= currency(report.summary.cash_collected) %></div>
+    <div class="card-actions"><span class="pill <%= report.summary.outstanding_cash > 0 ? "warn" : "ok" %>">&#8373; <%= currency(report.summary.outstanding_cash) %> outstanding</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Trade-in Credit</div>
+    <div class="card-value money">&#8373; <%= currency(report.summary.trade_in_credit) %></div>
+    <div class="card-actions"><span class="pill muted">Reduces cash due</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Discounts</div>
+    <div class="card-value money">&#8373; <%= currency(report.summary.discounts) %></div>
+    <div class="card-actions"><span class="pill muted">Removed from sales</span></div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="panel">
+    <h2>Profit Formula</h2>
+    <dl class="dl">
+      <div><dt>Net sales</dt><dd>Sale price - Discount</dd></div>
+      <div><dt>Gross profit</dt><dd>Net sales - Stock cost</dd></div>
+      <div><dt>Cash expected</dt><dd>Net sales - Trade-in credit</dd></div>
+      <div><dt>Outstanding cash</dt><dd>Cash expected - Cash collected</dd></div>
+    </dl>
+    <p class="hint">Trade-in phones become inventory. Their value reduces customer cash now, then becomes cost when that trade-in phone is sold later.</p>
+  </div>
+
+  <div class="panel">
+    <h2>By Salesperson</h2>
+    <table class="table compact">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Sales</th>
+          <th>Net Sales</th>
+          <th>Profit</th>
+          <th>Margin</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const person of report.bySalesperson) { %>
+          <tr>
+            <td><%= person.salesperson_name %></td>
+            <td><%= person.sales_count %></td>
+            <td>&#8373; <%= currency(person.net_sales) %></td>
+            <td>&#8373; <%= currency(person.gross_profit) %></td>
+            <td><%= person.margin.toFixed(1) %>%</td>
+          </tr>
+        <% } %>
+        <% if (report.bySalesperson.length === 0) { %>
+          <tr>
+            <td colspan="5" class="muted">No sales in this period.</td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Sale Profit Details</h2>
+  <table class="table compact">
+    <thead>
+      <tr>
+        <th>Invoice</th>
+        <th>Date</th>
+        <th>Customer</th>
+        <th>Device</th>
+        <th>Salesperson</th>
+        <th>Net Sales</th>
+        <th>Stock Cost</th>
+        <th>Profit</th>
+        <th>Cash In</th>
+        <th>Outstanding</th>
+        <th>Margin</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const sale of report.rows) { %>
+        <tr>
+          <td class="mono"><a href="/sales/<%= sale.id %>"><%= sale.invoice_no %></a></td>
+          <td><%= (sale.created_at || "").slice(0, 10) %></td>
+          <td><%= sale.customer_name %></td>
+          <td><%= sale.device_model %></td>
+          <td><%= sale.salesperson_name %></td>
+          <td>&#8373; <%= currency(sale.net_sales) %></td>
+          <td>&#8373; <%= currency(sale.device_cost) %></td>
+          <td><span class="pill <%= sale.gross_profit >= 0 ? "ok" : "danger" %>">&#8373; <%= currency(sale.gross_profit) %></span></td>
+          <td>&#8373; <%= currency(sale.cash_collected) %></td>
+          <td>&#8373; <%= currency(sale.outstanding_cash) %></td>
+          <td><%= sale.margin.toFixed(1) %>%</td>
+        </tr>
+      <% } %>
+      <% if (report.rows.length === 0) { %>
+        <tr>
+          <td colspan="11" class="muted">No sales in this period.</td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table>
+</div>
+
+<%- include("../partials/foot") %>
+

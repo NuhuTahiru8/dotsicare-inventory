@@ -1,0 +1,30 @@
+<%- include("../partials/head", { title: "Setup Admin" }) %>
+<%- include("../partials/nav") %>
+
+<div class="auth">
+  <div class="auth-card">
+    <img class="auth-logo" src="/public/logo.png" alt="Dotsicare logo" />
+    <h1>Setup Admin</h1>
+    <div class="muted">Create the first admin account.</div>
+
+    <% if (error) { %>
+      <div class="alert"><%= error %></div>
+    <% } %>
+
+    <form class="form" method="post" action="/setup">
+      <div class="grid">
+        <label>
+          Admin Username *
+          <input name="name" required />
+        </label>
+        <label>
+          Password (min 6) *
+          <input name="password" type="password" required />
+        </label>
+      </div>
+      <button class="btn" type="submit">Create Admin</button>
+    </form>
+  </div>
+</div>
+
+<%- include("../partials/foot") %>

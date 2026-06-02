@@ -1,0 +1,84 @@
+<%- include("../partials/head", { title: "User Management" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>User Management</h1>
+  <a class="btn secondary" href="/admin">Back</a>
+</div>
+
+<% if (message) { %>
+  <div class="panel">
+    <div class="pill ok"><%= message %></div>
+  </div>
+<% } %>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<div class="split">
+  <div class="panel">
+    <h2>Create Employee / Admin</h2>
+    <form class="form" method="post" action="/admin/users">
+      <div class="grid">
+        <label>
+          Username *
+          <input name="name" required />
+        </label>
+        <label>
+          Role *
+          <select name="role" required>
+            <option value="">Select</option>
+            <option>Employee</option>
+            <option>Admin</option>
+          </select>
+        </label>
+        <label class="span-2">
+          Password (min 6) *
+          <input name="password" type="password" required />
+        </label>
+      </div>
+      <button class="btn" type="submit">Create User</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Users</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Sales</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const u of users) { %>
+          <tr>
+            <td><%= u.id %></td>
+            <td><%= u.name %></td>
+            <td><span class="pill <%= u.role === "Admin" ? "ok" : "muted" %>"><%= u.role %></span></td>
+            <td><%= u.sale_count || 0 %></td>
+            <td><%= (u.created_at || "").slice(0, 10) %></td>
+            <td>
+              <div class="table-actions">
+                <form class="form-inline compact" method="post" action="/admin/users/<%= u.id %>/password">
+                  <input name="password" type="password" minlength="6" placeholder="New password" required />
+                  <button class="btn small secondary" type="submit">Change Password</button>
+                </form>
+                <form method="post" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Delete this user account? Sales history keeps the salesperson name.');">
+                  <button class="btn small danger" type="submit" <%= currentUser && currentUser.id === u.id ? "disabled" : "" %>>Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include("../partials/foot") %>

@@ -1,0 +1,61 @@
+﻿<%- include("../partials/head", { title: "Add Stock" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <div>
+    <h1>Add Stock</h1>
+    <% if (currentBranch) { %>
+      <div class="muted">Adding to <%= currentBranch.name %> only</div>
+    <% } %>
+  </div>
+  <a class="btn secondary" href="/inventory">Back</a>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<form class="form" method="post" action="/inventory/new">
+  <div class="grid">
+    <label>
+      Model *
+      <input name="model" required />
+    </label>
+    <label>
+      Storage
+      <input name="storage" placeholder="e.g. 128GB" />
+    </label>
+    <label>
+      Color
+      <input name="color" placeholder="e.g. Black" />
+    </label>
+    <label>
+      Condition *
+      <select name="condition" required>
+        <option value="">Select</option>
+        <option>New</option>
+        <option>Used</option>
+      </select>
+    </label>
+    <label>
+      Cost Price (&#8373;) *
+      <input name="cost_price" type="number" min="0" required />
+    </label>
+    <label>
+      Sale Price (&#8373;) *
+      <input name="sale_price" type="number" min="0" required />
+    </label>
+    <label>
+      IMEI 1 *
+      <input name="imei1" required />
+    </label>
+    <label>
+      IMEI 2
+      <input name="imei2" />
+    </label>
+  </div>
+
+  <button class="btn" type="submit">Save</button>
+</form>
+
+<%- include("../partials/foot") %>

@@ -1,0 +1,40 @@
+﻿<%- include("../partials/head", { title: "Installments" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Installments</h1>
+  <% if (currentUser && currentUser.role === "Admin") { %>
+    <a class="btn secondary" href="/sms">Debt SMS</a>
+  <% } %>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Invoice</th>
+      <th>Customer</th>
+      <th>Phone</th>
+      <th>Device</th>
+      <th>Balance</th>
+      <th>Due</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const i of items) { %>
+      <tr>
+        <td class="mono"><%= i.invoice_no %></td>
+        <td><%= i.customer_name %></td>
+        <td class="mono"><%= i.customer_phone %></td>
+        <td><%= i.device_model %></td>
+        <td>&#8373; <%= currency(i.balance) %></td>
+        <td><%= (i.due_date || "").slice(0, 10) %></td>
+        <td><span class="pill <%= i.computed_status === "Overdue" ? "danger" : "warn" %>"><%= i.computed_status %></span></td>
+        <td><a class="btn small secondary" href="/sales/<%= i.sale_id %>">Open</a></td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include("../partials/foot") %>

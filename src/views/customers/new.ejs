@@ -1,0 +1,39 @@
+<%- include("../partials/head", { title: "Add Customer" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Add Customer</h1>
+  <a class="btn secondary" href="/customers">Back</a>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<form class="form" method="post" action="/customers/new">
+  <div class="grid">
+    <label>
+      Full Name *
+      <input name="name" required />
+    </label>
+    <label>
+      Phone *
+      <input name="phone" required />
+    </label>
+    <label>
+      Address
+      <input name="address" />
+    </label>
+    <label>
+      ID Type
+      <input name="id_type" placeholder="NIN, Voter's Card, Driver's License" />
+    </label>
+    <label>
+      ID Number
+      <input name="id_number" />
+    </label>
+  </div>
+  <button class="btn" type="submit">Save</button>
+</form>
+
+<%- include("../partials/foot") %>

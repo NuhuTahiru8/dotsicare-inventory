@@ -1,0 +1,98 @@
+﻿<%- include("../partials/head", { title: "Sale Detail" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Invoice <span class="mono"><%= sale.invoice_no %></span></h1>
+  <a class="btn secondary" href="/sales">Back</a>
+</div>
+
+<div class="split">
+  <div class="panel">
+    <h2>Sale</h2>
+    <dl class="dl">
+      <div><dt>Customer</dt><dd><%= sale.customer_name %> (<span class="mono"><%= sale.customer_phone %></span>)</dd></div>
+      <div><dt>Device</dt><dd><%= sale.device_model %></dd></div>
+      <%
+        const typeLabel =
+          sale.sale_type === "SwapFull"
+            ? "Swap (Full)"
+            : sale.sale_type === "SwapInstallment"
+              ? "Swap (Installment)"
+              : sale.sale_type;
+      %>
+      <div><dt>Type</dt><dd><%= typeLabel %></dd></div>
+      <div><dt>Sale</dt><dd>&#8373; <%= currency(sale.sale_price) %></dd></div>
+      <div><dt>Discount</dt><dd>&#8373; <%= currency(sale.discount) %></dd></div>
+      <div><dt>Trade-in Value</dt><dd>&#8373; <%= currency(tradeValue || 0) %></dd></div>
+      <div><dt>Payable</dt><dd>&#8373; <%= currency(payable) %></dd></div>
+      <div><dt>Date</dt><dd><%= (sale.created_at || "").slice(0, 10) %></dd></div>
+      <div><dt>Sold By</dt><dd><%= sale.salesperson_name || "Unknown" %></dd></div>
+    </dl>
+  </div>
+
+  <div class="panel">
+    <h2>Installment</h2>
+    <% if (plan) { %>
+      <dl class="dl">
+        <div><dt>Down Payment</dt><dd>&#8373; <%= currency(plan.down_payment) %></dd></div>
+        <div><dt>Balance</dt><dd>&#8373; <%= currency(plan.balance) %></dd></div>
+        <div><dt>Due Date</dt><dd><%= (plan.due_date || "").slice(0, 10) %></dd></div>
+        <div><dt>Status</dt><dd><span class="pill <%= plan.status === "Overdue" ? "danger" : plan.status === "PaidOff" ? "ok" : "warn" %>"><%= plan.status %></span></dd></div>
+      </dl>
+
+      <form class="form-inline" method="post" action="/sales/<%= sale.id %>/payments">
+        <input name="amount" type="number" min="1" placeholder="Payment amount (&#8373;)" required />
+        <select name="method">
+          <option>Cash</option>
+          <option>Transfer</option>
+          <option>POS</option>
+        </select>
+        <input name="reference" placeholder="Reference (optional)" />
+        <button class="btn small" type="submit">Add Payment</button>
+      </form>
+    <% } else { %>
+      <div class="muted">Not an installment sale.</div>
+    <% } %>
+  </div>
+</div>
+
+<% if (tradeIn) { %>
+  <div class="panel">
+    <h2>Trade-in</h2>
+    <dl class="dl">
+      <div><dt>Model</dt><dd><%= tradeIn.device_model %></dd></div>
+      <div><dt>Variant</dt><dd><%= [tradeIn.storage, tradeIn.color].filter(Boolean).join(" / ") %></dd></div>
+      <div><dt>Condition</dt><dd><%= tradeIn.device_condition %></dd></div>
+      <div><dt>IMEI(s)</dt><dd><span class="mono"><%= tradeIn.imeis || "" %></span></dd></div>
+      <div><dt>Value</dt><dd>&#8373; <%= currency(tradeIn.trade_in_value) %></dd></div>
+    </dl>
+  </div>
+<% } %>
+
+<div class="panel">
+  <h2>Payments</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Amount</th>
+        <th>Method</th>
+        <th>Reference</th>
+        <th>Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const p of payments) { %>
+        <tr>
+          <td><%= p.id %></td>
+          <td>&#8373; <%= currency(p.amount) %></td>
+          <td><%= p.method %></td>
+          <td class="mono"><%= p.reference || "" %></td>
+          <td><%= (p.paid_at || "").slice(0, 19).replace("T", " ") %></td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table>
+</div>
+
+<%- include("../partials/foot") %>

@@ -1,0 +1,36 @@
+<%- include("../partials/head", { title: "SMS Templates" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>SMS Templates</h1>
+  <a class="btn secondary" href="/sms">Back</a>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Name</th>
+      <th>Body</th>
+      <th>Active</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const t of templates) { %>
+      <tr>
+        <td><%= t.id %></td>
+        <td><%= t.name %></td>
+        <td class="mono"><%= t.body %></td>
+        <td><span class="pill <%= t.active ? "ok" : "muted" %>"><%= t.active ? "Yes" : "No" %></span></td>
+        <td>
+          <form method="post" action="/sms/templates/<%= t.id %>/toggle">
+            <button class="btn small secondary" type="submit"><%= t.active ? "Disable" : "Enable" %></button>
+          </form>
+        </td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include("../partials/foot") %>

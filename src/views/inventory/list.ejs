@@ -1,0 +1,66 @@
+﻿<%- include("../partials/head", { title: "Inventory" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <div>
+    <h1>Inventory</h1>
+    <% if (currentBranch) { %>
+      <div class="muted"><%= currentBranch.name %> stock only</div>
+    <% } %>
+  </div>
+  <a class="btn" href="/inventory/new">Add Stock</a>
+</div>
+
+<% if (message) { %>
+  <div class="panel"><span class="pill ok"><%= message %></span></div>
+<% } %>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Model</th>
+      <th>Variant</th>
+      <th>Condition</th>
+      <th>IMEI(s)</th>
+      <th>Status</th>
+      <th>Cost</th>
+      <th>Sale</th>
+      <th>Added</th>
+      <% if (currentUser && currentUser.role === "Admin") { %>
+        <th>Actions</th>
+      <% } %>
+    </tr>
+  </thead>
+  <tbody>
+    <% for (const d of items) { %>
+      <tr>
+        <td><%= d.id %></td>
+        <td><%= d.model %></td>
+        <td><%= [d.storage, d.color].filter(Boolean).join(" / ") %></td>
+        <td><%= d.condition %></td>
+        <td class="mono"><%= d.imeis || "" %></td>
+        <td><span class="pill <%= d.status === "InStock" ? "ok" : "muted" %>"><%= d.status %></span></td>
+        <td>&#8373; <%= currency(d.cost_price) %></td>
+        <td>&#8373; <%= currency(d.sale_price) %></td>
+        <td><%= (d.created_at || "").slice(0, 10) %></td>
+        <% if (currentUser && currentUser.role === "Admin") { %>
+          <td>
+            <div class="table-actions">
+              <a class="btn small secondary" href="/inventory/<%= d.id %>/edit">Edit</a>
+              <form method="post" action="/inventory/<%= d.id %>/delete" onsubmit="return confirm('Delete this stock item? This cannot be undone.');">
+                <button class="btn small danger" type="submit" <%= d.status !== "InStock" ? "disabled" : "" %>>Delete</button>
+              </form>
+            </div>
+          </td>
+        <% } %>
+      </tr>
+    <% } %>
+  </tbody>
+</table>
+
+<%- include("../partials/foot") %>

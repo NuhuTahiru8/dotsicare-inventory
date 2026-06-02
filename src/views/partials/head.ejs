@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= title || "Dotsicare" %></title>
+    <% if (typeof description !== "undefined" && description) { %>
+      <meta name="description" content="<%= description %>" />
+    <% } %>
+    <% if (typeof keywords !== "undefined" && keywords) { %>
+      <meta name="keywords" content="<%= keywords %>" />
+    <% } %>
+    <% if (typeof canonical !== "undefined" && canonical) { %>
+      <link rel="canonical" href="<%= canonical %>" />
+    <% } %>
+    <meta property="og:title" content="<%= typeof ogTitle !== "undefined" && ogTitle ? ogTitle : title || "Dotsicare" %>" />
+    <% if (typeof description !== "undefined" && description) { %>
+      <meta property="og:description" content="<%= description %>" />
+    <% } %>
+    <% if (typeof ogImage !== "undefined" && ogImage) { %>
+      <meta property="og:image" content="<%= ogImage %>" />
+    <% } %>
+    <meta property="og:type" content="<%= typeof ogType !== "undefined" && ogType ? ogType : "website" %>" />
+    <link rel="icon" type="image/png" href="/public/logo.png" />
+    <link rel="apple-touch-icon" href="/public/logo.png" />
+    <link rel="stylesheet" href="/public/styles.css" />
+    <% if (typeof jsonLd !== "undefined" && jsonLd) { %>
+      <script type="application/ld+json"><%- JSON.stringify(jsonLd) %></script>
+    <% } %>
+  </head>
+  <body class="<%= typeof bodyClass !== "undefined" ? bodyClass : "" %>">
