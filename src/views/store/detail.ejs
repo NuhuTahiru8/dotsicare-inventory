@@ -1,43 +1,30 @@
-<%- include("../partials/head", {
-  title,
-  description,
-  keywords,
-  canonical,
-  ogTitle,
-  ogImage,
-  ogType,
-  bodyClass,
-  jsonLd
-}) %>
+<%- include("../partials/head", { title, description, keywords, canonical, ogTitle, ogImage, ogType, bodyClass, jsonLd }) %>
 
-<header class="store-topline">
-  <a class="store-brand" href="/">
+<header class="store-detail-header">
+  <a class="store-top-brand" href="/">
     <img src="/public/logo.png" alt="Dotsicare logo" />
     <span>
       <strong>Dotsicare</strong>
       <small>Ask price on WhatsApp</small>
     </span>
   </a>
-  <div class="store-nav-actions">
-    <a class="btn secondary" href="/">Back To Store</a>
+  <div class="store-top-actions">
+    <a class="store-btn ghost" href="/">Back To Store</a>
     <% if (currentUser) { %>
-      <a class="btn secondary" href="/dashboard">Staff Dashboard</a>
+      <a class="store-btn ghost" href="/dashboard">Dashboard</a>
     <% } %>
   </div>
 </header>
 
-<main class="product-page">
-  <section class="product-gallery">
-    <button
-      class="product-main-image js-detail-gallery"
-      type="button"
+<main class="detail-layout">
+  <section class="detail-gallery">
+    <button class="detail-main-img js-detail-gallery" type="button"
       data-title="<%= item.title %>"
       data-images="<%= jsonAttr(item.images) %>"
-      data-whatsapp="<%= item.whatsapp_base %>"
-    >
+      data-whatsapp="<%= item.whatsapp_base %>">
       <img id="detailMainImage" src="<%= item.selected_image %>" alt="<%= item.title %>" />
     </button>
-    <div class="product-thumbs">
+    <div class="detail-thumb-strip">
       <% item.images.forEach(function (image, index) { %>
         <button class="<%= index === item.selected_image_index ? "active" : "" %>" type="button" data-image="<%= image %>">
           <img src="<%= image %>" alt="<%= item.title %> image <%= index + 1 %>" />
@@ -46,13 +33,13 @@
     </div>
   </section>
 
-  <section class="product-info">
-    <div class="auth-kicker"><%= item.category %> · <%= item.branch %></div>
+  <section class="detail-info">
+    <div class="detail-eye"><%= item.category %></div>
     <h1><%= item.title %></h1>
-    <p class="store-note">Price is not shown online. Chat with the seller for current price, availability, and exact condition.</p>
+    <p class="detail-note">Price is not shown online. Chat with the seller.</p>
 
     <% if (item.specs_lines.length) { %>
-      <div class="spec-chip-grid">
+      <div class="detail-spec-chips">
         <% for (const spec of item.specs_lines) { %>
           <span><%= spec %></span>
         <% } %>
@@ -60,145 +47,125 @@
     <% } %>
 
     <% if (item.description) { %>
-      <div class="panel product-description">
+      <div class="detail-description">
         <h2>Product Info</h2>
         <p><%= item.description %></p>
       </div>
     <% } %>
 
-    <div class="product-actions">
+    <div class="detail-actions">
       <% if (item.whatsapp_url) { %>
-        <a class="btn" id="detailWhatsapp" href="<%= item.whatsapp_url %>" target="_blank" rel="noopener">Ask Price on WhatsApp</a>
+        <a class="store-btn primary" id="detailWhatsapp" href="<%= item.whatsapp_url %>" target="_blank" rel="noopener">Ask Price on WhatsApp</a>
       <% } %>
-      <button class="btn secondary js-detail-gallery" type="button" data-title="<%= item.title %>" data-images="<%= jsonAttr(item.images) %>" data-whatsapp="<%= item.whatsapp_url %>">Open Gallery</button>
+      <button class="store-btn ghost js-detail-gallery" type="button" data-title="<%= item.title %>" data-images="<%= jsonAttr(item.images) %>" data-whatsapp="<%= item.whatsapp_base %>">View Gallery</button>
     </div>
   </section>
 </main>
 
 <% if (related.length) { %>
-  <section class="store-section">
-    <div class="store-section-head">
+  <section class="store-section related-section">
+    <div class="store-section-header">
       <div>
-        <div class="auth-kicker">More From This Category</div>
+        <div class="store-eyebrow">Similar</div>
         <h2>You may also like</h2>
       </div>
     </div>
-    <div class="store-grid related-grid">
+    <div class="related-grid">
       <% for (const relatedItem of related) { %>
-        <article class="store-card">
-          <a class="store-card-image" href="<%= relatedItem.url %>">
-            <img src="<%= relatedItem.first_image %>" alt="<%= relatedItem.title %>" />
+        <div class="product-card">
+          <a class="product-card-image" href="<%= relatedItem.url %>">
+            <img src="<%= relatedItem.first_image %>" alt="<%= relatedItem.title %>" loading="lazy" />
           </a>
-          <div class="store-card-body">
-            <a class="store-card-title" href="<%= relatedItem.url %>"><%= relatedItem.title %></a>
-            <div class="store-card-meta"><%= relatedItem.category %></div>
-            <div class="store-card-actions">
-              <a class="btn small secondary" href="<%= relatedItem.url %>">View</a>
-              <% if (relatedItem.whatsapp_url) { %>
-                <a class="btn small" href="<%= relatedItem.whatsapp_url %>" target="_blank" rel="noopener">Ask Price</a>
-              <% } %>
+          <div class="product-card-body">
+            <a class="product-card-title" href="<%= relatedItem.url %>"><%= relatedItem.title %></a>
+            <span class="product-card-cat"><%= relatedItem.category %></span>
+            <div class="product-card-actions">
+              <a class="store-btn primary" href="<%= relatedItem.whatsapp_url %>" target="_blank" rel="noopener">Ask Price</a>
+              <a class="store-btn ghost" href="<%= relatedItem.url %>">View</a>
             </div>
           </div>
-        </article>
+        </div>
       <% } %>
     </div>
   </section>
 <% } %>
 
 <div class="store-lightbox" id="storeLightbox" hidden>
-  <button class="lightbox-close" type="button" aria-label="Close gallery">×</button>
+  <button class="lightbox-close" type="button" aria-label="Close gallery">&times;</button>
   <div class="lightbox-card">
     <img id="lightboxImage" src="<%= item.selected_image %>" alt="<%= item.title %>" />
     <h3 id="lightboxTitle"><%= item.title %></h3>
     <div class="lightbox-thumbs" id="lightboxThumbs"></div>
-    <% if (item.whatsapp_url) { %>
-      <a class="btn" id="lightboxWhatsapp" href="<%= item.whatsapp_url %>" target="_blank" rel="noopener">Ask Price on WhatsApp</a>
-    <% } %>
+    <a class="store-btn primary" id="lightboxWhatsapp" href="#" target="_blank" hidden>Ask Price on WhatsApp</a>
   </div>
 </div>
 
 <script>
-  (function () {
-    var main = document.getElementById("detailMainImage");
-    var detailWhatsapp = document.getElementById("detailWhatsapp");
-    var detailWhatsappBase = "<%= item.whatsapp_base %>";
+(function () {
+  var main = document.getElementById("detailMainImage");
+  var detailWhatsapp = document.getElementById("detailWhatsapp");
+  var detailWhatsappBase = "<%= item.whatsapp_base %>";
 
-    function appendImageToLink(baseUrl, imageSrc) {
-      if (!baseUrl) return "";
-      var absoluteSrc = new URL(imageSrc, window.location.origin).href;
-      return baseUrl + encodeURIComponent("\nSelected image: " + absoluteSrc);
-    }
+  function appendImageToLink(baseUrl, imageSrc) {
+    if (!baseUrl) return "";
+    var absoluteSrc = new URL(imageSrc, window.location.origin).href;
+    return baseUrl + encodeURIComponent("\nSelected image: " + absoluteSrc);
+  }
 
-    document.querySelectorAll(".product-thumbs button").forEach(function (button, index) {
-      button.addEventListener("click", function () {
-        var src = button.dataset.image;
-        main.src = src;
-        document.querySelectorAll(".product-thumbs button").forEach(function (thumb, thumbIndex) {
-          thumb.classList.toggle("active", thumbIndex === index);
-        });
-        if (detailWhatsapp) {
-          detailWhatsapp.href = appendImageToLink(detailWhatsappBase, src);
-        }
+  document.querySelectorAll(".detail-thumb-strip button").forEach(function (button, index) {
+    button.addEventListener("click", function () {
+      var src = button.dataset.image;
+      main.src = src;
+      document.querySelectorAll(".detail-thumb-strip button").forEach(function (thumb, i) {
+        thumb.classList.toggle("active", i === index);
       });
+      if (detailWhatsapp) detailWhatsapp.href = appendImageToLink(detailWhatsappBase, src);
     });
+  });
 
-    var lightbox = document.getElementById("storeLightbox");
-    var image = document.getElementById("lightboxImage");
-    var title = document.getElementById("lightboxTitle");
-    var thumbs = document.getElementById("lightboxThumbs");
-    var whatsapp = document.getElementById("lightboxWhatsapp");
+  var lightbox = document.getElementById("storeLightbox");
+  var image = document.getElementById("lightboxImage");
+  var title = document.getElementById("lightboxTitle");
+  var thumbs = document.getElementById("lightboxThumbs");
+  var whatsapp = document.getElementById("lightboxWhatsapp");
 
-    function openGallery(button) {
-      var images = [];
-      try {
-        images = JSON.parse(decodeURIComponent(button.dataset.images || "%5B%5D"));
-      } catch (e) {
-        images = [];
-      }
-      if (!images.length) images = ["/public/logo.png"];
-      var itemTitle = button.dataset.title || "Product Gallery";
-      var whatsappBaseUrl = button.dataset.whatsapp || "";
-      title.textContent = itemTitle;
-      thumbs.innerHTML = "";
-      function choose(src, index) {
-        image.src = src;
-        image.alt = itemTitle + " image " + (index + 1);
-        Array.prototype.forEach.call(thumbs.children, function (thumb, thumbIndex) {
-          thumb.classList.toggle("active", thumbIndex === index);
-        });
-        if (whatsapp && whatsappBaseUrl) {
-          whatsapp.href = appendImageToLink(whatsappBaseUrl, src);
-          whatsapp.hidden = false;
-        } else {
-          whatsapp.hidden = true;
-        }
-      }
-      images.forEach(function (src, index) {
-        var thumb = document.createElement("button");
-        thumb.type = "button";
-        thumb.innerHTML = '<img src="' + src.replace(/"/g, "&quot;") + '" alt="">';
-        thumb.addEventListener("click", function () { choose(src, index); });
-        thumbs.appendChild(thumb);
-      });
-      choose(main ? main.src : images[0], 0);
-      lightbox.hidden = false;
-      document.body.classList.add("lightbox-open");
+  function openGallery(button) {
+    var images = [];
+    try { images = JSON.parse(decodeURIComponent(button.dataset.images || "%5B%5D")); } catch (e) { images = []; }
+    if (!images.length) images = ["/public/logo.png"];
+    var itemTitle = button.dataset.title || "Product Gallery";
+    var whatsappBaseUrl = button.dataset.whatsapp || "";
+    title.textContent = itemTitle;
+    thumbs.innerHTML = "";
+    function choose(src, index) {
+      image.src = src;
+      image.alt = itemTitle + " image " + (index + 1);
+      Array.prototype.forEach.call(thumbs.children, function (t, i) { t.classList.toggle("active", i === index); });
+      if (whatsapp && whatsappBaseUrl) { whatsapp.href = appendImageToLink(whatsappBaseUrl, src); whatsapp.hidden = false; }
+      else { whatsapp.hidden = true; }
     }
+    images.forEach(function (src, index) {
+      var thumb = document.createElement("button");
+      thumb.type = "button";
+      thumb.innerHTML = '<img src="' + src.replace(/"/g, "&quot;") + '" alt="">';
+      thumb.addEventListener("click", function () { choose(src, index); });
+      thumbs.appendChild(thumb);
+    });
+    choose(main ? main.src : images[0], 0);
+    lightbox.hidden = false;
+    document.body.classList.add("lightbox-open");
+  }
 
-    document.querySelectorAll(".js-detail-gallery").forEach(function (button) {
-      button.addEventListener("click", function () { openGallery(button); });
-    });
-    document.querySelector(".lightbox-close")?.addEventListener("click", function () {
-      lightbox.hidden = true;
-      document.body.classList.remove("lightbox-open");
-    });
-    lightbox?.addEventListener("click", function (event) {
-      if (event.target === lightbox) {
-        lightbox.hidden = true;
-        document.body.classList.remove("lightbox-open");
-      }
-    });
-  })();
+  document.querySelectorAll(".js-detail-gallery").forEach(function (btn) {
+    btn.addEventListener("click", function () { openGallery(btn); });
+  });
+  document.querySelector(".lightbox-close")?.addEventListener("click", function () {
+    lightbox.hidden = true; document.body.classList.remove("lightbox-open");
+  });
+  lightbox?.addEventListener("click", function (e) {
+    if (e.target === lightbox) { lightbox.hidden = true; document.body.classList.remove("lightbox-open"); }
+  });
+})();
 </script>
 
 <%- include("../partials/foot") %>

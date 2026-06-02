@@ -739,6 +739,7 @@ app.get("/", (req, res) => {
   const categories = getStoreCategoryCards(branch);
   const canonical = `${baseUrl(req)}/`;
   const logoUrl = absoluteUrl(req, "/public/logo.png");
+  const defaultWhatsappLink = `https://wa.me/${whatsappNumber(defaultWhatsappPhone)}?text=${encodeURIComponent("Hello Dotsicare, I am interested in your products. Please send me your catalog or price list.")}`;
 
   res.render("store/home", {
     title: "Dotsicare | Best iPhone & Phone Shop in Konongo, Ghana",
@@ -747,11 +748,13 @@ app.get("/", (req, res) => {
     canonical,
     ogTitle: "Dotsicare Phone Shop in Konongo, Ghana",
     ogImage: logoUrl,
+    ogType: "website",
     bodyClass: "store-body",
     listings,
     categories,
     selectedBranch: branch,
     selectedCategory: category,
+    defaultWhatsapp: defaultWhatsappLink,
     whatsappPhone: whatsappNumber(defaultWhatsappPhone),
     jsonLd: {
       "@context": "https://schema.org",
