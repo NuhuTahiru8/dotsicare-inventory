@@ -1,15 +1,15 @@
 <%- include("../partials/head", { title, description, keywords, ogTitle, ogImage, ogType, canonical, bodyClass }) %>
 
 <div class="store-splash" id="storeSplash">
-  <img src="/public/logo.png" alt="Dotsicare logo" />
-  <div>Dotsicare</div>
+  <img src="/public/logo.png" alt="DOT'S iCARE logo" />
+  <div>DOT'S iCARE</div>
 </div>
 
 <nav class="store-top-nav">
   <a class="store-top-brand" href="/">
-    <img src="/public/logo.png" alt="Dotsicare" />
+    <img src="/public/logo.png" alt="DOT'S iCARE" />
     <span>
-      <strong>Dotsicare</strong>
+      <strong>DOT'S iCARE</strong>
       <small>Konongo &middot; Ghana</small>
     </span>
   </a>
@@ -25,14 +25,14 @@
   <div class="store-hero-inner">
     <div class="store-hero-text">
       <h1>Discover Premium Electronics</h1>
-      <p>Dotsicare brings you the finest smartphones, accessories, and gadgets. Ask for the best price on WhatsApp — no price displayed, just honest deals.</p>
+      <p>DOT'S iCARE brings you the finest smartphones, accessories, and gadgets. Ask for the best price on WhatsApp — no price displayed, just honest deals.</p>
       <div class="store-hero-actions">
         <a class="store-btn primary" href="#shop">Browse Products</a>
         <a class="store-btn ghost" href="<%= defaultWhatsapp %>" target="_blank">Chat on WhatsApp</a>
       </div>
     </div>
     <div class="store-hero-visual">
-      <img src="/public/logo.png" alt="Dotsicare hero" />
+      <img src="/public/logo.png" alt="DOT'S iCARE hero" />
     </div>
   </div>
 </section>
@@ -147,9 +147,9 @@
 
 <!-- FOOTER -->
 <footer class="store-footer">
-  <img src="/public/logo.png" alt="Dotsicare logo" />
+  <img src="/public/logo.png" alt="DOT'S iCARE logo" />
   <div>
-    <strong>Dotsicare</strong>
+    <strong>DOT'S iCARE</strong>
     <span>Best iPhone and phone shop in Konongo, Ghana.</span>
   </div>
   <a class="store-admin-trigger" href="/login">Admin</a>
@@ -159,15 +159,17 @@
 (function () {
   var splash = document.getElementById("storeSplash");
   if (splash) {
-    var seen = sessionStorage.getItem("dotsicare_store_seen2");
+    var seen = sessionStorage.getItem("dotsicare_store_seen3");
     if (seen) {
       splash.remove();
+      document.body.classList.add("page-ready");
     } else {
-      sessionStorage.setItem("dotsicare_store_seen2", "1");
+      sessionStorage.setItem("dotsicare_store_seen3", "1");
       setTimeout(function () {
         splash.classList.add("hide");
-        setTimeout(function () { splash.remove(); }, 450);
-      }, 1000);
+        document.body.classList.add("page-ready");
+        setTimeout(function () { splash.remove(); }, 700);
+      }, 5000);
     }
   }
 

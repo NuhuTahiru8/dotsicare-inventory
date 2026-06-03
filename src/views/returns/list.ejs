@@ -1,0 +1,67 @@
+<%- include("../partials/head", { title: "Returns" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Returns</h1>
+  <a class="btn secondary" href="/dashboard">Dashboard</a>
+</div>
+
+<% if (message) { %>
+  <div class="pill ok"><%= message %></div>
+<% } %>
+
+<div class="panel">
+  <table class="table compact">
+    <thead>
+      <tr>
+        <th>Invoice</th>
+        <th>Customer</th>
+        <th>Device</th>
+        <th>IMEI</th>
+        <th>Reason</th>
+        <th>Fault</th>
+        <th>Refund</th>
+        <th>Status</th>
+        <th>Date</th>
+        <% if (currentUser && currentUser.role === "Admin") { %>
+          <th>Action</th>
+        <% } %>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const r of returns) { %>
+        <tr>
+          <td class="mono"><a href="/sales/<%= r.sale_id %>"><%= r.invoice_no %></a></td>
+          <td><%= r.customer_name %></td>
+          <td><%= r.device_model %></td>
+          <td class="mono"><%= r.imei || "-" %></td>
+          <td><%= r.reason %></td>
+          <td><%= r.fault_description || "-" %></td>
+          <td>&#8373; <%= currency(r.refund_amount) %></td>
+          <td><span class="pill <%= r.status === "Resolved" ? "ok" : r.status === "Sent to Supplier" ? "warn" : "danger" %>"><%= r.status %></span></td>
+          <td><%= (r.created_at || "").slice(0, 10) %></td>
+          <% if (currentUser && currentUser.role === "Admin") { %>
+            <td>
+              <form class="form-inline" method="post" action="/returns/<%= r.id %>/status" style="gap: 4px;">
+                <% if (r.status === "Customer Return") { %>
+                  <input type="hidden" name="status" value="Sent to Supplier" />
+                  <button class="btn small warn" type="submit">Send to Supplier</button>
+                <% } else if (r.status === "Sent to Supplier") { %>
+                  <input type="hidden" name="status" value="Resolved" />
+                  <button class="btn small ok" type="submit">Mark Resolved</button>
+                <% } %>
+              </form>
+            </td>
+          <% } %>
+        </tr>
+      <% } %>
+      <% if (returns.length === 0) { %>
+        <tr>
+          <td colspan="<%= currentUser && currentUser.role === 'Admin' ? 10 : 9 %>" class="muted">No returns recorded yet.</td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table>
+</div>
+
+<%- include("../partials/foot") %>

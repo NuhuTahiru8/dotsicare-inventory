@@ -1,25 +1,112 @@
-﻿<%- include("../partials/head", { title: "Sale Detail" }) %>
+<%- include("../partials/head", { title: "Sale Detail" }) %>
 <%- include("../partials/nav") %>
 
-<div class="row">
-  <h1>Invoice <span class="mono"><%= sale.invoice_no %></span></h1>
-  <a class="btn secondary" href="/sales">Back</a>
+<%
+  const typeLabel =
+    sale.sale_type === "SwapFull" ? "Swap (Full)"
+    : sale.sale_type === "SwapInstallment" ? "Swap (Installment)"
+    : sale.sale_type;
+%>
+
+<div class="row no-print">
+  <h1>Invoice <span class="mono"><%= sale.invoice_no %></span>
+    <% if (sale.is_returned) { %>
+      <span class="pill danger" style="margin-left: 10px; vertical-align: middle;">Returned</span>
+    <% } %>
+  </h1>
+  <div class="row-actions">
+    <% if (!sale.is_returned) { %>
+      <a class="btn warn" href="/sales/<%= sale.id %>/return">Process Return</a>
+    <% } %>
+    <button class="btn" onclick="window.print()">Print Receipt</button>
+    <a class="btn secondary" href="/sales">Back</a>
+  </div>
 </div>
 
-<div class="split">
+<% if (sale.is_returned && returnRecord) { %>
+  <div class="panel return-panel no-print">
+    <h2>Return Details</h2>
+    <dl class="dl">
+      <div><dt>Reason</dt><dd><%= returnRecord.reason %></dd></div>
+      <% if (returnRecord.fault_description) { %>
+        <div><dt>Fault</dt><dd><%= returnRecord.fault_description %></dd></div>
+      <% } %>
+      <div><dt>IMEI</dt><dd class="mono"><%= returnRecord.imei || "-" %></dd></div>
+      <div><dt>Refund</dt><dd>&#8373; <%= currency(returnRecord.refund_amount) %></dd></div>
+      <div><dt>Status</dt><dd><span class="pill <%= returnRecord.status === "Resolved" ? "ok" : "warn" %>"><%= returnRecord.status %></span></dd></div>
+      <% if (returnRecord.notes) { %>
+        <div><dt>Notes</dt><dd><%= returnRecord.notes %></dd></div>
+      <% } %>
+      <div><dt>Date</dt><dd><%= (returnRecord.created_at || "").slice(0, 10) %></dd></div>
+    </dl>
+  </div>
+<% } %>
+
+<!-- PRINTABLE RECEIPT -->
+<div class="print-receipt">
+  <div class="print-receipt-header">
+    <strong class="print-shop-name">DOT'S iCARE</strong>
+    <span>Best iPhone & Phone Shop, Konongo, Ghana</span>
+    <span class="print-invoice">Invoice: <%= sale.invoice_no %></span>
+    <span class="print-date"><%= (sale.created_at || "").slice(0, 10) %></span>
+  </div>
+  <hr class="print-hr" />
+
+  <table class="print-table">
+    <tr><td class="print-dt">Customer</td><td><%= sale.customer_name %> &mdash; <%= sale.customer_phone %></td></tr>
+    <tr><td class="print-dt">Device</td><td><%= sale.device_model %> (<%= sale.device_imeis || "" %>)</td></tr>
+    <tr><td class="print-dt">Type</td><td><%= typeLabel %></td></tr>
+    <tr><td class="print-dt">Sale Price</td><td>&#8373; <%= currency(sale.sale_price) %></td></tr>
+    <% if (Number(sale.discount) > 0) { %>
+      <tr><td class="print-dt">Discount</td><td>&#8373; <%= currency(sale.discount) %></td></tr>
+    <% } %>
+    <% if (tradeValue > 0) { %>
+      <tr><td class="print-dt">Trade-in Value</td><td>&#8373; <%= currency(tradeValue) %></td></tr>
+    <% } %>
+    <tr><td class="print-dt">Payable</td><td><strong>&#8373; <%= currency(payable) %></strong></td></tr>
+  </table>
+
+  <% if (plan) { %>
+    <hr class="print-hr" />
+    <strong class="print-section">Installment Plan</strong>
+    <table class="print-table">
+      <tr><td class="print-dt">Down Payment</td><td>&#8373; <%= currency(plan.down_payment) %></td></tr>
+      <tr><td class="print-dt">Balance</td><td>&#8373; <%= currency(plan.balance) %></td></tr>
+      <tr><td class="print-dt">Due Date</td><td><%= (plan.due_date || "").slice(0, 10) %></td></tr>
+      <tr><td class="print-dt">Status</td><td><%= plan.status %></td></tr>
+    </table>
+  <% } %>
+
+  <% if (payments.length) { %>
+    <hr class="print-hr" />
+    <strong class="print-section">Payments</strong>
+    <table class="print-table">
+      <thead class="print-thead"><tr><th>Amount</th><th>Method</th><th>Date</th></tr></thead>
+      <% for (const p of payments) { %>
+        <tr>
+          <td>&#8373; <%= currency(p.amount) %></td>
+          <td><%= p.method %></td>
+          <td><%= (p.paid_at || "").slice(0, 19).replace("T", " ") %></td>
+        </tr>
+      <% } %>
+    </table>
+  <% } %>
+
+  <hr class="print-hr" />
+  <div class="print-footer">
+    <span>Thank you for your purchase!</span>
+    <span>Sold by: <%= sale.salesperson_name || "DOT'S iCARE" %></span>
+  </div>
+</div>
+
+<!-- SCREEN VIEW -->
+<div class="screen-only">
   <div class="panel">
     <h2>Sale</h2>
     <dl class="dl">
       <div><dt>Customer</dt><dd><%= sale.customer_name %> (<span class="mono"><%= sale.customer_phone %></span>)</dd></div>
       <div><dt>Device</dt><dd><%= sale.device_model %></dd></div>
-      <%
-        const typeLabel =
-          sale.sale_type === "SwapFull"
-            ? "Swap (Full)"
-            : sale.sale_type === "SwapInstallment"
-              ? "Swap (Installment)"
-              : sale.sale_type;
-      %>
+      <div><dt>IMEI</dt><dd class="mono"><%= sale.device_imeis || "-" %></dd></div>
       <div><dt>Type</dt><dd><%= typeLabel %></dd></div>
       <div><dt>Sale</dt><dd>&#8373; <%= currency(sale.sale_price) %></dd></div>
       <div><dt>Discount</dt><dd>&#8373; <%= currency(sale.discount) %></dd></div>
@@ -94,5 +181,7 @@
     </tbody>
   </table>
 </div>
+
+</div><!-- /screen-only -->
 
 <%- include("../partials/foot") %>

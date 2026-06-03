@@ -61,6 +61,27 @@ function migrate() {
   addColumnIfMissing("message_templates", "created_by_user_id INTEGER");
   addColumnIfMissing("sms_messages", "branch TEXT NOT NULL DEFAULT 'Konongo'");
   addColumnIfMissing("sms_messages", "created_by_user_id INTEGER");
+  addColumnIfMissing("sales", "is_returned INTEGER NOT NULL DEFAULT 0");
+
+  //  returns table (create if not exists — schema.sql handles it, migration fallback)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS returns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_id INTEGER NOT NULL UNIQUE,
+      device_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      fault_description TEXT,
+      imei TEXT,
+      refund_amount INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'Customer Return',
+      notes TEXT,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      resolved_at TEXT,
+      FOREIGN KEY (sale_id) REFERENCES sales(id),
+      FOREIGN KEY (device_id) REFERENCES devices(id)
+    );
+  `);
 
   const createdAt = new Date().toISOString();
   const openingBatch = db.prepare(

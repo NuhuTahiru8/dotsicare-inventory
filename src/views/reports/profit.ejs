@@ -1,4 +1,4 @@
-﻿<%- include("../partials/head", { title: "Profit Report" }) %>
+<%- include("../partials/head", { title: "Profit Report" }) %>
 <%- include("../partials/nav") %>
 
 <div class="row">
@@ -61,6 +61,41 @@
 
 <div class="split">
   <div class="panel">
+    <h2>Monthly Profit</h2>
+    <table class="table compact">
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th>Sales</th>
+          <th>Net Sales</th>
+          <th>Profit</th>
+          <th>Cash In</th>
+          <th>Outstanding</th>
+          <th>Margin</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const m of report.byMonth) { %>
+          <tr>
+            <td><strong><%= m.label %></strong></td>
+            <td><%= m.sales_count %></td>
+            <td>&#8373; <%= currency(m.net_sales) %></td>
+            <td><span class="pill <%= m.gross_profit >= 0 ? "ok" : "danger" %>">&#8373; <%= currency(m.gross_profit) %></span></td>
+            <td>&#8373; <%= currency(m.cash_collected) %></td>
+            <td>&#8373; <%= currency(m.outstanding_cash) %></td>
+            <td><%= m.margin.toFixed(1) %>%</td>
+          </tr>
+        <% } %>
+        <% if (report.byMonth.length === 0) { %>
+          <tr>
+            <td colspan="7" class="muted">No sales data yet.</td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
     <h2>Profit Formula</h2>
     <dl class="dl">
       <div><dt>Net sales</dt><dd>Sale price - Discount</dd></div>
@@ -69,37 +104,6 @@
       <div><dt>Outstanding cash</dt><dd>Cash expected - Cash collected</dd></div>
     </dl>
     <p class="hint">Trade-in phones become inventory. Their value reduces customer cash now, then becomes cost when that trade-in phone is sold later.</p>
-  </div>
-
-  <div class="panel">
-    <h2>By Salesperson</h2>
-    <table class="table compact">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Sales</th>
-          <th>Net Sales</th>
-          <th>Profit</th>
-          <th>Margin</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% for (const person of report.bySalesperson) { %>
-          <tr>
-            <td><%= person.salesperson_name %></td>
-            <td><%= person.sales_count %></td>
-            <td>&#8373; <%= currency(person.net_sales) %></td>
-            <td>&#8373; <%= currency(person.gross_profit) %></td>
-            <td><%= person.margin.toFixed(1) %>%</td>
-          </tr>
-        <% } %>
-        <% if (report.bySalesperson.length === 0) { %>
-          <tr>
-            <td colspan="5" class="muted">No sales in this period.</td>
-          </tr>
-        <% } %>
-      </tbody>
-    </table>
   </div>
 </div>
 

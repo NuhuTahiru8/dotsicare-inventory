@@ -1,0 +1,235 @@
+<%- include("../partials/head", { title: "Bulk Stock Entry" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <div>
+    <h1>Bulk Stock Entry</h1>
+    <div class="muted">Add multiple devices at once with one click.</div>
+  </div>
+  <div class="row-actions">
+    <a class="btn secondary" href="/admin">Back</a>
+    <a class="btn secondary" href="/inventory">Inventory</a>
+  </div>
+</div>
+
+<% if (ok && ok.length) { %>
+  <div class="panel">
+    <div class="pill ok"><%= ok.length %> device(s) added successfully</div>
+  </div>
+<% } %>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<!-- QUICK FILL -->
+<div class="panel" style="border: 2px solid var(--navy, #1D2430); background: rgba(29,36,48,0.03);">
+  <div class="row">
+    <h2>Quick Fill</h2>
+    <div class="muted">Type model, color, storage and quantity — rows fill automatically.</div>
+  </div>
+  <div class="form-inline" style="gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+    <label style="flex: 1; min-width: 140px; margin: 0;">
+      <span class="mono" style="font-size: 11px;">Model</span>
+      <input id="quickModel" class="bulk-input" placeholder="iPhone 12" list="datalistModels" style="margin-top: 2px;" />
+    </label>
+    <label style="flex: 1; min-width: 100px; margin: 0;">
+      <span class="mono" style="font-size: 11px;">Color</span>
+      <input id="quickColor" class="bulk-input" placeholder="Black" list="datalistColors" style="margin-top: 2px;" />
+    </label>
+    <label style="flex: 0 0 90px; min-width: 75px; margin: 0;">
+      <span class="mono" style="font-size: 11px;">Storage</span>
+      <input id="quickStorage" class="bulk-input" placeholder="128GB" list="datalistStorages" style="margin-top: 2px;" />
+    </label>
+    <label style="flex: 0 0 90px; min-width: 80px; margin: 0;">
+      <span class="mono" style="font-size: 11px;">Condition</span>
+      <select id="quickCondition" class="bulk-input" style="margin-top: 2px;">
+        <option value="">-</option>
+        <option>New</option>
+        <option>Used</option>
+      </select>
+    </label>
+    <label style="flex: 0 0 85px; min-width: 70px; margin: 0;">
+      <span class="mono" style="font-size: 11px;">Cost &#8373;</span>
+      <input id="quickCost" class="bulk-input" type="number" min="0" placeholder="5000" style="margin-top: 2px;" />
+    </label>
+    <label style="flex: 0 0 85px; min-width: 70px; margin: 0;">
+      <span class="mono" style="font-size: 11px;">Sale &#8373;</span>
+      <input id="quickSale" class="bulk-input" type="number" min="0" placeholder="6500" style="margin-top: 2px;" />
+    </label>
+    <label style="flex: 0 0 70px; min-width: 55px; margin: 0;">
+      <span class="mono" style="font-size: 11px;">Qty</span>
+      <input id="quickQty" class="bulk-input" type="number" min="1" max="500" value="1" style="margin-top: 2px;" />
+    </label>
+    <button class="btn" type="button" id="quickFillBtn" style="min-height: 38px;">Generate Rows</button>
+  </div>
+  <div class="hint" style="margin-top: 8px;">All generated rows get the same details. IMEI stays blank — fill per-device. Edit any row to change individual values (e.g. swap colors for a few).</div>
+</div>
+
+<div class="panel">
+  <form id="bulkForm" class="form" method="post" action="/admin/bulk">
+    <div class="grid">
+      <label>
+        Stock Batch
+        <input name="stock_batch_name" list="stockBatches" value="<%= defaultBatchName || "Opening Stock" %>" placeholder="May 2026 Stock" />
+      </label>
+    </div>
+    <datalist id="stockBatches">
+      <% for (const batch of batches || []) { %>
+        <option value="<%= batch.name %>"></option>
+      <% } %>
+    </datalist>
+
+    <table class="table compact" id="bulkTable" style="margin-top: 14px;">
+      <thead>
+        <tr>
+          <th style="width: 40px;">#</th>
+          <th>Model *</th>
+          <th>Storage</th>
+          <th>Color</th>
+          <th style="width: 100px;">Condition</th>
+          <th>Cost &#8373;</th>
+          <th>Sale &#8373;</th>
+          <th>IMEI 1 *</th>
+          <th>IMEI 2</th>
+          <th style="width: 50px;"></th>
+        </tr>
+      </thead>
+      <tbody id="bulkTbody">
+      </tbody>
+    </table>
+
+    <div class="form-footer">
+      <button class="btn secondary" type="button" id="addRowBtn">+ Add Row</button>
+      <button class="btn" type="submit">Add All To Stock</button>
+      <span class="muted" id="rowCount" style="margin-left: 12px;">0 devices ready</span>
+    </div>
+  </form>
+</div>
+
+<!-- DATALISTS (shared) -->
+<datalist id="datalistModels">
+  <% for (const m of models || []) { %><option value="<%= m %>"></option><% } %>
+</datalist>
+<datalist id="datalistStorages">
+  <% for (const s of storages || []) { %><option value="<%= s %>"></option><% } %>
+</datalist>
+<datalist id="datalistColors">
+  <% for (const c of colors || []) { %><option value="<%= c %>"></option><% } %>
+</datalist>
+
+<style>
+.bulk-input { width: 100%; min-width: 80px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: inherit; background: var(--surface); outline: none; transition: border-color 0.15s; }
+.bulk-input:focus { border-color: var(--blue); }
+.bulk-row td { padding: 6px 8px; vertical-align: middle; }
+.bulk-row-num { font-size: 12px; font-weight: 800; color: var(--muted); text-align: center; }
+.imei-input { font-family: monospace; font-size: 12px; }
+.bulk-remove { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; min-height: unset; padding: 0; font-size: 16px; border-radius: 8px; }
+</style>
+
+<script>
+(function () {
+  var tbody = document.getElementById("bulkTbody");
+  var addBtn = document.getElementById("addRowBtn");
+  var rowCount = document.getElementById("rowCount");
+  var rowIndex = 0;
+
+  function makeRow(modelVal, colorVal, storageVal, costVal, saleVal, condVal) {
+    var idx = rowIndex;
+    rowIndex++;
+    var tr = document.createElement("tr");
+    tr.className = "bulk-row";
+    tr.setAttribute("data-index", idx);
+    tr.innerHTML =
+      '<td class="bulk-row-num">' + (idx + 1) + '</td>' +
+      '<td><input name="row[' + idx + '][model]" class="bulk-input" placeholder="iPhone 15 Pro Max" list="datalistModels" value="' + (modelVal || '').replace(/"/g, '&quot;') + '" /></td>' +
+      '<td><input name="row[' + idx + '][storage]" class="bulk-input" placeholder="256GB" list="datalistStorages" value="' + (storageVal || '').replace(/"/g, '&quot;') + '" /></td>' +
+      '<td><input name="row[' + idx + '][color]" class="bulk-input" placeholder="Black" list="datalistColors" value="' + (colorVal || '').replace(/"/g, '&quot;') + '" /></td>' +
+      '<td><select name="row[' + idx + '][condition]" class="bulk-input"><option value="">-</option><option' + (condVal === "New" ? ' selected' : '') + '>New</option><option' + (condVal === "Used" ? ' selected' : '') + '>Used</option></select></td>' +
+      '<td><input name="row[' + idx + '][cost_price]" class="bulk-input" type="number" min="0" placeholder="5000" value="' + (costVal || '') + '" /></td>' +
+      '<td><input name="row[' + idx + '][sale_price]" class="bulk-input" type="number" min="0" placeholder="6500" value="' + (saleVal || '') + '" /></td>' +
+      '<td><input name="row[' + idx + '][imei1]" class="bulk-input imei-input" placeholder="Last 4 digits" /></td>' +
+      '<td><input name="row[' + idx + '][imei2]" class="bulk-input imei-input" placeholder="Optional" /></td>' +
+      '<td><button class="btn small danger bulk-remove" type="button" title="Remove row">&times;</button></td>';
+    tbody.appendChild(tr);
+  }
+
+  function updateNumbers() {
+    var rows = tbody.querySelectorAll(".bulk-row");
+    rowCount.textContent = rows.length + " device" + (rows.length !== 1 ? "s" : "") + " ready";
+  }
+
+  function addRow() {
+    makeRow("", "", "", "", "", "");
+    updateNumbers();
+    var lastRow = tbody.querySelectorAll(".bulk-row");
+    if (lastRow.length) {
+      var input = lastRow[lastRow.length - 1].querySelector("input");
+      if (input) input.focus();
+    }
+  }
+
+  // Quick fill
+  document.getElementById("quickFillBtn").addEventListener("click", function () {
+    var model = document.getElementById("quickModel").value.trim();
+    var color = document.getElementById("quickColor").value.trim();
+    var storage = document.getElementById("quickStorage").value.trim();
+    var condition = document.getElementById("quickCondition").value;
+    var cost = document.getElementById("quickCost").value.trim();
+    var sale = document.getElementById("quickSale").value.trim();
+    var qty = Math.min(parseInt(document.getElementById("quickQty").value, 10) || 1, 500);
+    var startIdx = tbody.querySelectorAll(".bulk-row").length;
+
+    for (var i = 0; i < qty; i++) {
+      makeRow(model, color, storage, cost, sale, condition);
+    }
+    updateNumbers();
+
+    // Scroll to first new row
+    var rows = tbody.querySelectorAll(".bulk-row");
+    if (rows[startIdx]) rows[startIdx].scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  //  Enter key: next field or add row
+  tbody.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) {
+      e.preventDefault();
+      var cells = Array.from(e.target.closest("tr").querySelectorAll("input, select"));
+      var idx = cells.indexOf(e.target);
+      if (idx < cells.length - 1) {
+        cells[idx + 1].focus();
+      } else {
+        var rows = tbody.querySelectorAll(".bulk-row");
+        var current = e.target.closest(".bulk-row");
+        var rowIdx = Array.prototype.indexOf.call(rows, current);
+        if (rowIdx === rows.length - 1) {
+          addRow();
+        } else {
+          var nextInputs = rows[rowIdx + 1].querySelectorAll("input, select");
+          if (nextInputs.length) nextInputs[0].focus();
+        }
+      }
+    }
+  });
+
+  //  Tab moves forward naturally (no extra handling needed)
+  //  Shift+Tab moves backward naturally
+
+  tbody.addEventListener("click", function (e) {
+    if (e.target.classList.contains("bulk-remove")) {
+      var row = e.target.closest(".bulk-row");
+      if (row && tbody.querySelectorAll(".bulk-row").length > 1) {
+        row.remove();
+        updateNumbers();
+      }
+    }
+  });
+
+  addBtn.addEventListener("click", addRow);
+
+  // Start with one empty row
+  addRow();
+})();
+</script>
+
+<%- include("../partials/foot") %>

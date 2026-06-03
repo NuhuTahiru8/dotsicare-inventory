@@ -1,8 +1,8 @@
-﻿<%- include("../partials/head", { title: "Debt SMS" }) %>
+<%- include("../partials/head", { title: "SMS Center" }) %>
 <%- include("../partials/nav") %>
 
 <div class="row">
-  <h1>Debt SMS Center</h1>
+  <h1>SMS Center</h1>
   <div class="row-actions">
     <a class="btn secondary" href="/sms/templates">Templates</a>
     <a class="btn secondary" href="/sms/logs">Logs</a>
@@ -13,45 +13,81 @@
   <div class="alert"><%= error %></div>
 <% } %>
 
-<form class="form" method="post" action="/sms/send">
-  <input type="hidden" name="filter" value="<%= filter %>" />
-
+<form class="form" method="post" action="/sms/send" id="smsForm">
   <div class="grid">
     <label>
-      Recipient Filter
-      <select name="filter" onchange="location.href='/sms?filter='+encodeURIComponent(this.value)+'&template_id='+encodeURIComponent(document.getElementById('templateSelect').value||'')">
-        <option value="overdue" <%= filter === "overdue" ? "selected" : "" %>>Overdue</option>
-        <option value="due-soon" <%= filter === "due-soon" ? "selected" : "" %>>Due Soon (7 days)</option>
-        <option value="all-active" <%= filter === "all-active" ? "selected" : "" %>>All Active</option>
-      </select>
+      Sender ID
+      <input readonly value="<%= senderId %>" class="mono" />
     </label>
 
     <label>
       Use Template
-      <select id="templateSelect" name="template_id" onchange="location.href='/sms?filter='+encodeURIComponent('<%= filter %>')+'&template_id='+encodeURIComponent(this.value)">
+      <select name="template_id" id="templateSelect" onchange="applyTemplate()">
         <option value="">None</option>
         <% for (const t of templates) { %>
-          <option value="<%= t.id %>" <%= selectedTemplateId === t.id ? "selected" : "" %>><%= t.name %></option>
+          <option value="<%= t.id %>" data-body="<%= t.body.replace(/"/g, '&quot;').replace(/"/g, '&quot;') %>" <%= selectedTemplateId === t.id ? "selected" : "" %>><%= t.name %></option>
         <% } %>
       </select>
     </label>
 
     <label class="span-2">
-      Message (Sender ID: <span class="mono"><%= senderId %></span>) *
-      <textarea name="message" rows="4" required placeholder="Type the reminder message"><%= message || "" %></textarea>
+      Message *
+      <textarea name="message" id="msgText" rows="4" required placeholder="Type the SMS message"><%= message || "" %></textarea>
     </label>
   </div>
 
+  <!--  PASTE CONTACTS  -->
+  <div class="panel" style="border: 2px solid var(--blue); background: rgba(0,122,255,0.03);">
+    <div class="row">
+      <h2>Paste Contacts</h2>
+      <div class="muted">Paste any text with phone numbers &mdash; only Ghana numbers are kept.</div>
+    </div>
+    <label class="span-2">
+      <textarea id="pasteArea" rows="6" placeholder="Paste contacts from your phone here...&#10;&#10;e.g.&#10;Mom: 0244123456&#10;Dad: +233501234567&#10;Kwame 0205551234&#10;+44123456789 (will be removed)&#10;0541234567&#10;etc..." style="font-family: monospace; font-size: 13px;"></textarea>
+    </label>
+    <div class="form-footer">
+      <button class="btn secondary" type="button" id="sanitizeBtn">Sanitize &amp; Preview</button>
+      <span class="muted" id="sanitizeCount" style="margin-left: 12px;"></span>
+    </div>
+    <div id="pastePreview" style="display: none; margin-top: 12px; max-height: 180px; overflow-y: auto;">
+      <table class="table compact" id="pastePreviewTable">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="selectAllPaste" /></th>
+            <th>#</th>
+            <th>Phone</th>
+            <th>Source Text</th>
+          </tr>
+        </thead>
+        <tbody id="pastePreviewBody"></tbody>
+      </table>
+      <div class="form-footer">
+        <button class="btn" type="submit" id="sendPasteBtn" disabled>Send to <span id="sendPasteCount">0</span> Contact(s)</button>
+      </div>
+    </div>
+    <div class="hint" style="margin-top: 8px;">Numbers that start with <strong>233</strong>, <strong>05</strong>, <strong>02</strong>, <strong>05</strong>, <strong>054</strong>, <strong>055</strong>, <strong>059</strong>, <strong>026</strong>, <strong>027</strong>, <strong>024</strong>, <strong>020</strong> are kept. Foreign numbers are removed. Duplicates are merged.</div>
+  </div>
+
+  <!--  INSTALLMENT CUSTOMERS TABLE  -->
   <div class="panel">
     <div class="row">
-      <h2>Recipients (<%= recipients.length %>)</h2>
-      <div class="muted">Select who should receive this message.</div>
+      <h2>Installment Customers (<%= recipients.length %>)</h2>
+      <div class="row-actions">
+        <label>
+          Filter
+          <select name="filter" onchange="location.href='/sms?filter='+encodeURIComponent(this.value)+'&template_id='+encodeURIComponent(document.getElementById('templateSelect').value||'')">
+            <option value="overdue" <%= filter === "overdue" ? "selected" : "" %>>Overdue</option>
+            <option value="due-soon" <%= filter === "due-soon" ? "selected" : "" %>>Due Soon</option>
+            <option value="all-active" <%= filter === "all-active" ? "selected" : "" %>>All Active</option>
+          </select>
+        </label>
+      </div>
     </div>
 
-    <table class="table">
+    <table class="table compact">
       <thead>
         <tr>
-          <th></th>
+          <th><input type="checkbox" id="selectAllCustomers" /></th>
           <th>Customer</th>
           <th>Phone</th>
           <th>Invoice</th>
@@ -63,7 +99,7 @@
       <tbody>
         <% for (const r of recipients) { %>
           <tr>
-            <td><input type="checkbox" name="recipient" value="<%= r.sale_id %>" /></td>
+            <td><input type="checkbox" name="recipient" value="<%= r.sale_id %>" class="customer-check" /></td>
             <td><%= r.name %></td>
             <td class="mono"><%= r.phone %></td>
             <td class="mono"><%= r.invoice_no %></td>
@@ -86,12 +122,102 @@
       </label>
       <label>
         Template Name
-        <input name="template_name" placeholder="e.g. Overdue Reminder" />
+        <input name="template_name" placeholder="e.g. Birthday Wish, Promo Blast" />
       </label>
     </div>
   </div>
 
-  <button class="btn" type="submit">Send SMS</button>
+  <button class="btn" type="submit" id="submitSms">Send SMS</button>
 </form>
+
+<script>
+function applyTemplate() {
+  var sel = document.getElementById("templateSelect");
+  var idx = sel.selectedIndex;
+  if (idx > 0) {
+    var body = sel.options[idx].getAttribute("data-body");
+    document.getElementById("msgText").value = body || "";
+  }
+}
+
+//  Paste area logic
+(function () {
+  var pasteArea = document.getElementById("pasteArea");
+  var sanitizeBtn = document.getElementById("sanitizeBtn");
+  var sanitizeCount = document.getElementById("sanitizeCount");
+  var previewDiv = document.getElementById("pastePreview");
+  var previewBody = document.getElementById("pastePreviewBody");
+  var selectAllPaste = document.getElementById("selectAllPaste");
+  var sendPasteBtn = document.getElementById("sendPasteBtn");
+  var sendPasteCount = document.getElementById("sendPasteCount");
+
+  var pasteNumbers = [];
+
+  function extractGhanaNumbers(text) {
+    return text.match(/(?:\+?233|0)(?:20|24|26|27|28|50|53|54|55|56|57|59)\d{7}/g) || [];
+  }
+
+  function cleanNumber(raw) {
+    var n = raw.trim().replace(/^\+/, "");
+    if (n.startsWith("0")) n = "233" + n.slice(1);
+    return n;
+  }
+
+  sanitizeBtn.addEventListener("click", function () {
+    var raw = pasteArea.value || "";
+    var matches = extractGhanaNumbers(raw);
+    var seen = new Set();
+    pasteNumbers = [];
+    for (var i = 0; i < matches.length; i++) {
+      var clean = cleanNumber(matches[i]);
+      if (!seen.has(clean)) {
+        seen.add(clean);
+        pasteNumbers.push({ phone: clean, source: matches[i] });
+      }
+    }
+
+    sanitizeCount.textContent = pasteNumbers.length + " Ghana number(s) found";
+    previewBody.innerHTML = "";
+
+    if (pasteNumbers.length === 0) {
+      previewDiv.style.display = "none";
+      return;
+    }
+
+    previewDiv.style.display = "block";
+    for (var j = 0; j < pasteNumbers.length; j++) {
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td><input type="checkbox" name="paste_recipient" value="' + pasteNumbers[j].phone + '" class="paste-check" checked /></td>' +
+        '<td>' + (j + 1) + '</td>' +
+        '<td class="mono">' + pasteNumbers[j].phone + '</td>' +
+        '<td class="muted" style="font-size:12px;">' + pasteNumbers[j].source + '</td>';
+      previewBody.appendChild(tr);
+    }
+
+    updatePasteCount();
+  });
+
+  selectAllPaste.addEventListener("change", function () {
+    var checks = document.querySelectorAll(".paste-check");
+    for (var i = 0; i < checks.length; i++) checks[i].checked = selectAllPaste.checked;
+    updatePasteCount();
+  });
+
+  previewBody.addEventListener("change", function () { updatePasteCount(); });
+
+  function updatePasteCount() {
+    var checked = document.querySelectorAll(".paste-check:checked");
+    var count = checked.length;
+    sendPasteCount.textContent = count;
+    sendPasteBtn.disabled = count === 0;
+  }
+
+  document.getElementById("selectAllCustomers").addEventListener("change", function () {
+    var checks = document.querySelectorAll(".customer-check");
+    for (var i = 0; i < checks.length; i++) checks[i].checked = document.getElementById("selectAllCustomers").checked;
+  });
+})();
+</script>
 
 <%- include("../partials/foot") %>

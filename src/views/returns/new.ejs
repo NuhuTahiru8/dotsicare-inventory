@@ -1,0 +1,66 @@
+<%- include("../partials/head", { title: "Process Return" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Process Return</h1>
+  <a class="btn secondary" href="/sales/<%= sale.id %>">Back to Sale</a>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<div class="panel">
+  <dl class="dl">
+    <div><dt>Invoice</dt><dd class="mono"><%= sale.invoice_no %></dd></div>
+    <div><dt>Customer</dt><dd><%= sale.customer_name %> (<%= sale.customer_phone %>)</dd></div>
+    <div><dt>Device</dt><dd><%= sale.device_model %></dd></div>
+    <div><dt>IMEI(s)</dt><dd class="mono"><%= sale.device_imeis || "-" %></dd></div>
+  </dl>
+</div>
+
+<form class="panel form" method="post" action="/sales/<%= sale.id %>/return">
+  <div class="grid">
+    <label>
+      Return Reason *
+      <select name="reason" required>
+        <option value="">-- select --</option>
+        <option value="Faulty Speaker">Faulty Speaker</option>
+        <option value="Faulty Screen">Faulty Screen</option>
+        <option value="Faulty Battery">Faulty Battery</option>
+        <option value="Faulty Camera">Faulty Camera</option>
+        <option value="Faulty Charging Port">Faulty Charging Port</option>
+        <option value="Network Issue">Network Issue</option>
+        <option value="Software Issue">Software Issue</option>
+        <option value="Water Damage">Water Damage</option>
+        <option value="Warranty Claim">Warranty Claim</option>
+        <option value="Wrong Item">Wrong Item</option>
+        <option value="Customer Changed Mind">Customer Changed Mind</option>
+        <option value="Other">Other</option>
+      </select>
+    </label>
+    <label>
+      IMEI of Returned Device
+      <input name="imei" placeholder="Last 4 digits" class="mono" />
+    </label>
+    <label class="span-2">
+      Fault Description
+      <textarea name="fault_description" rows="3" placeholder="Describe what went wrong e.g. Speaker crackles at high volume, screen flickers when charging..."></textarea>
+    </label>
+    <label>
+      Refund Amount (&#8373;)
+      <input name="refund_amount" type="number" min="0" placeholder="0" />
+      <span class="muted">Leave 0 if no refund yet</span>
+    </label>
+    <label class="span-2">
+      Notes
+      <textarea name="notes" rows="2" placeholder="Any extra info..."></textarea>
+    </label>
+  </div>
+  <button class="btn danger" type="submit" style="margin-top: 12px;">Confirm Return</button>
+  <span class="muted" style="margin-left: 12px; font-size: 13px;">
+    This will mark the sale as returned, set the device to "Returned" status, and cancel any active installment plan.
+  </span>
+</form>
+
+<%- include("../partials/foot") %>

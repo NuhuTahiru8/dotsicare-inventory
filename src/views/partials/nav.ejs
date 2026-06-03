@@ -2,10 +2,10 @@
   <div class="container topbar-inner">
     <a class="brand" href="<%= currentUser ? "/dashboard" : "/" %>">
       <span class="brand-mark">
-        <img class="brand-logo" src="/public/logo.png" alt="Dotsicare logo" />
+        <img class="brand-logo" src="/public/logo.png" alt="DOT'S iCARE logo" />
       </span>
       <span>
-        <strong>Dotsicare</strong>
+        <strong>DOT'S iCARE</strong>
         <% if (currentBranch) { %>
           <small><%= currentBranch.name %> Shop</small>
         <% } else { %>
@@ -22,8 +22,9 @@
           <a href="/customers">Customers</a>
           <a href="/sales">Sales</a>
           <a href="/reports/profit">Profit</a>
+          <a href="/returns">Returns</a>
           <a href="/installments">Installments</a>
-          <a href="/sms">Debt SMS</a>
+          <a href="/sms">SMS Center</a>
         <% } else { %>
           <a href="/sales">Sales</a>
           <a href="/customers">Customers</a>

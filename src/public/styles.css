@@ -632,14 +632,37 @@ dd {
 /*  Splash  */
 .store-splash {
   position: fixed; inset: 0; z-index: 999;
-  display: grid; place-items: center; gap: 18px;
+  display: grid; place-items: center; gap: 2px;
   background: #fff;
-  transition: opacity 0.4s ease, visibility 0.4s ease;
+  transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.7s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.store-splash img { width: 100px; height: 100px; object-fit: contain; animation: splashPulse 1.1s ease infinite alternate; }
-.store-splash div { font-size: 30px; font-weight: 900; letter-spacing: -0.04em; color: var(--navy); }
-.store-splash.hide { opacity: 0; visibility: hidden; }
-@keyframes splashPulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+.store-splash img { width: 140px; height: 140px; object-fit: contain; animation: splashPulse 5s ease-in-out infinite alternate; }
+.store-splash div { font-size: 38px; font-weight: 900; letter-spacing: -0.04em; color: var(--navy); animation: splashFadeUp 5s ease-out both; }
+.store-splash.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+@keyframes splashPulse {
+  from { transform: scale(0.9); opacity: 0.65; }
+  to   { transform: scale(1.05); opacity: 1; }
+}
+@keyframes splashFadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  30%  { opacity: 0; }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/*  Page reveal after splash  */
+.store-body .store-top-nav,
+.store-body .store-hero,
+.store-body .store-section,
+.store-body .store-footer {
+  opacity: 0;
+  transition: opacity 0.6s ease 0.1s;
+}
+.store-body.page-ready .store-top-nav,
+.store-body.page-ready .store-hero,
+.store-body.page-ready .store-section,
+.store-body.page-ready .store-footer {
+  opacity: 1;
+}
 
 /*  NAV BAR  */
 .store-top-nav {
@@ -914,4 +937,122 @@ body.lightbox-open { overflow: hidden; }
   .product-card-body .product-card-title { font-size: 14px; }
   .store-top-nav { padding: 10px 16px; }
   .store-detail-header { padding: 10px 16px; }
+}
+
+/* ─── PRINT RECEIPT ─── */
+.print-receipt {
+  display: none;
+  padding: 20px;
+  max-width: 620px;
+  margin: 0 auto;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  color: #000;
+  background: #fff;
+  line-height: 1.5;
+}
+.print-receipt-header {
+  text-align: center;
+  margin-bottom: 10px;
+}
+.print-shop-name {
+  display: block;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+.print-invoice {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+.print-date {
+  display: block;
+  font-size: 11px;
+  color: #555;
+}
+.print-hr {
+  border: 0;
+  border-top: 1px dashed #ccc;
+  margin: 10px 0;
+}
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.print-table td,
+.print-table th {
+  padding: 5px 4px;
+  text-align: left;
+  vertical-align: top;
+}
+.print-dt {
+  width: 105px;
+  font-weight: 700;
+  color: #333;
+}
+.print-thead th {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  border-bottom: 1px solid #000;
+  padding-bottom: 4px;
+}
+.print-section {
+  display: block;
+  font-size: 14px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+.print-footer {
+  text-align: center;
+  font-size: 12px;
+  margin-top: 8px;
+}
+.print-footer span {
+  display: block;
+}
+
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 8mm;
+  }
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .store-body,
+  .store-body * {
+    background: #fff !important;
+  }
+  .no-print,
+  .screen-only,
+  .store-nav,
+  .store-top-nav,
+  .store-detail-header,
+  .store-topline,
+  .container > nav,
+  footer,
+  .btn,
+  .pill,
+  .alert,
+  .form,
+  .form-inline,
+  .row-actions,
+  .store-footer,
+  .store-lightbox,
+  .store-splash {
+    display: none !important;
+  }
+  .print-receipt {
+    display: block !important;
+  }
+}
+
+@media screen {
+  .screen-only { display: block; }
 }

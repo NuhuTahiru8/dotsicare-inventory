@@ -3,36 +3,99 @@
 
 <div class="row">
   <h1>SMS Logs</h1>
-  <a class="btn secondary" href="/sms">Back</a>
+  <div class="row-actions">
+    <a class="btn secondary" href="/sms">SMS Center</a>
+    <a class="btn secondary" href="/sms/templates">Templates</a>
+  </div>
 </div>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>To</th>
-      <th>Customer</th>
-      <th>Invoice</th>
-      <th>Sender</th>
-      <th>Status</th>
-      <th>Sent At</th>
-      <th>Message</th>
-    </tr>
-  </thead>
-  <tbody>
-    <% for (const l of logs) { %>
-      <tr>
-        <td><%= l.id %></td>
-        <td class="mono"><%= l.to_phone %></td>
-        <td><%= l.customer_name || "" %></td>
-        <td class="mono"><%= l.invoice_no || "" %></td>
-        <td class="mono"><%= l.sender_id %></td>
-        <td><span class="pill <%= l.status === "Sent" ? "ok" : l.status === "Simulated" ? "muted" : "danger" %>"><%= l.status %></span></td>
-        <td><%= (l.sent_at || l.created_at || "").slice(0, 19).replace("T", " ") %></td>
-        <td class="mono"><%= l.body %></td>
-      </tr>
+<% if (query.sent) { %>
+  <div class="pill ok"><%= query.sent %> message(s) sent</div>
+<% } %>
+<% if (query.retried) { %>
+  <div class="pill ok"><%= query.retried %> message(s) retried</div>
+<% } %>
+<% if (query.deleted) { %>
+  <div class="pill ok">Message deleted</div>
+<% } %>
+
+<%
+  let stats = { Sent: 0, Retry: 0, Queued: 0 };
+  for (const row of logs) {
+    if (stats[row.status] !== undefined) stats[row.status]++;
+  }
+%>
+
+<div class="row" style="margin-bottom: 14px;">
+  <div class="row-actions">
+    <span class="pill ok">Sent: <%= stats.Sent %></span>
+    <% if (stats.Retry > 0) { %>
+      <span class="pill danger">Retry: <%= stats.Retry %></span>
+      <form class="form-inline" method="post" action="/sms/logs/retry-all" style="display: inline-flex;">
+        <button class="btn small warn" type="submit">Retry All (<%= stats.Retry %>)</button>
+      </form>
     <% } %>
-  </tbody>
-</table>
+    <% if (stats.Queued > 0) { %>
+      <span class="pill warn">Queued: <%= stats.Queued %></span>
+    <% } %>
+  </div>
+</div>
+
+<div class="panel">
+  <table class="table compact">
+    <thead>
+      <tr>
+        <th>Phone</th>
+        <th>Sender</th>
+        <th>Message</th>
+        <th>Status</th>
+        <th>Error</th>
+        <th>Date</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const row of logs) { %>
+        <tr>
+          <td class="mono"><%= row.to_phone %></td>
+          <td><%= row.sender_id %></td>
+          <td style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<%= (row.body || "").replace(/"/g, '&quot;').replace(/</g, '&lt;') %>"><%= row.body %></td>
+          <td>
+            <% if (row.status === "Sent") { %>
+              <span class="pill ok"><%= row.status %></span>
+            <% } else if (row.status === "Retry") { %>
+              <span class="pill danger"><%= row.status %></span>
+            <% } else { %>
+              <span class="pill warn"><%= row.status %></span>
+            <% } %>
+          </td>
+          <td class="muted" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<%= (row.error_message || "").replace(/"/g, '&quot;') %>"><%= row.error_message || "-" %></td>
+          <td><%= (row.created_at || "").slice(0, 16).replace("T", " ") %></td>
+          <td>
+            <% if (row.status === "Retry") { %>
+              <form class="form-inline" method="post" action="/sms/logs/retry/<%= row.id %>" style="display: inline-flex;">
+                <button class="btn small warn" type="submit">Retry</button>
+              </form>
+              <form class="form-inline" method="post" action="/sms/logs/delete/<%= row.id %>" style="display: inline-flex; margin-left: 4px;" onsubmit="return confirm('Delete this entry?')">
+                <button class="btn small danger" type="submit">Delete</button>
+              </form>
+            <% } else if (row.status === "Queued") { %>
+              <form class="form-inline" method="post" action="/sms/logs/delete/<%= row.id %>" style="display: inline-flex;" onsubmit="return confirm('Delete this entry?')">
+                <button class="btn small danger" type="submit">Delete</button>
+              </form>
+            <% } else { %>
+              <span class="muted">&mdash;</span>
+            <% } %>
+          </td>
+        </tr>
+      <% } %>
+      <% if (logs.length === 0) { %>
+        <tr>
+          <td colspan="7" class="muted">No SMS logs yet.</td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table>
+</div>
 
 <%- include("../partials/foot") %>

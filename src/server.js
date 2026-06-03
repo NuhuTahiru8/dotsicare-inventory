@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import multer from "multer";
 import { db, moneyToInt, nowIso } from "./db.js";
-import { enqueueSms, deliverSmsMessage, getSenderId } from "./sms.js";
+import { enqueueSms, deliverSmsMessage, deliverBulkMessages, getSenderId } from "./sms.js";
 
 const app = express();
 
@@ -52,7 +52,7 @@ const storeCategories = Object.freeze([
 ]);
 const defaultWhatsappPhone = (process.env.STORE_WHATSAPP_PHONE || process.env.WHATSAPP_PHONE || "").toString();
 const storeSeoDescription =
-  "Dotsicare is a trusted phone and iPhone shop in Konongo, Ghana. Browse iPhones, Android phones, chargers, power banks, PlayStation consoles, smart watches, and accessories.";
+  "DOT'S iCARE is a trusted phone and iPhone shop in Konongo, Ghana. Browse iPhones, Android phones, chargers, power banks, PlayStation consoles, smart watches, and accessories.";
 
 function normalizeBranch(value) {
   const raw = (value || "").toString().trim().toLowerCase();
@@ -168,7 +168,7 @@ function whatsappLink(req, listing, imageUrl = null) {
   if (!phone) return "";
   const itemUrl = storeItemUrl(req, listing);
   const message = [
-    `Hello Dotsicare, I am interested in this item: ${listing.title}.`,
+    `Hello DOT'S iCARE, I am interested in this item: ${listing.title}.`,
     `Product link: ${itemUrl}`,
     imageUrl ? `Selected image: ${absoluteUrl(req, imageUrl)}` : null,
     "Please send me the current price and availability."
@@ -355,7 +355,7 @@ app.use((req, res, next) => {
   res.locals.currentBranch = req.branch ? { key: req.branch, name: getBranchName(req.branch) } : null;
   res.locals.branches = branches;
   res.locals.storeCategories = storeCategories;
-  res.locals.siteName = "Dotsicare";
+  res.locals.siteName = "DOT'S iCARE";
   res.locals.defaultSeoDescription = storeSeoDescription;
   res.locals.jsonAttr = (value) => encodeURIComponent(JSON.stringify(value || []));
   next();
@@ -446,6 +446,13 @@ function getStockBatches(branch) {
   return db.prepare(`SELECT * FROM stock_batches WHERE branch = @branch ORDER BY id DESC`).all({ branch });
 }
 
+function getDistinctDeviceValues(branch) {
+  const models = db.prepare(`SELECT DISTINCT model FROM devices WHERE branch = @branch AND model IS NOT NULL AND model <> '' ORDER BY model`).all({ branch }).map((r) => r.model);
+  const storages = db.prepare(`SELECT DISTINCT storage FROM devices WHERE branch = @branch AND storage IS NOT NULL AND storage <> '' ORDER BY storage`).all({ branch }).map((r) => r.storage);
+  const colors = db.prepare(`SELECT DISTINCT color FROM devices WHERE branch = @branch AND color IS NOT NULL AND color <> '' ORDER BY color`).all({ branch }).map((r) => r.color);
+  return { models, storages, colors };
+}
+
 function defaultStockBatchName() {
   const date = new Date();
   const month = date.toLocaleString("en", { month: "short" });
@@ -526,7 +533,7 @@ function getBranchDashboard(branch) {
 function getProfitReport(branch, filters = {}) {
   const from = normalizeDateFilter(filters.from);
   const to = normalizeDateFilter(filters.to);
-  const conditions = [`s.branch = @branch`];
+  const conditions = [`s.branch = @branch`, `s.is_returned = 0`];
   const params = { branch };
 
   if (from) {
@@ -650,11 +657,55 @@ function getProfitReport(branch, filters = {}) {
 
   const bySalesperson = Array.from(salespersonMap.values()).sort((a, b) => b.gross_profit - a.gross_profit);
 
+  //  Monthly breakdown
+  const monthMap = new Map();
+  for (const row of rows) {
+    const monthKey = (row.created_at || "").slice(0, 7); //  YYYY-MM
+    if (!monthKey) continue;
+    const existing =
+      monthMap.get(monthKey) ||
+      {
+        month: monthKey,
+        sales_count: 0,
+        net_sales: 0,
+        device_cost: 0,
+        discount: 0,
+        trade_in_credit: 0,
+        cash_collected: 0,
+        outstanding_cash: 0,
+        gross_profit: 0
+      };
+    existing.sales_count += 1;
+    existing.net_sales += row.net_sales;
+    existing.device_cost += row.device_cost;
+    existing.discount += (row.discount || 0);
+    existing.trade_in_credit += row.trade_in_credit;
+    existing.cash_collected += row.cash_collected;
+    existing.outstanding_cash += row.outstanding_cash;
+    existing.gross_profit += row.gross_profit;
+    existing.margin = existing.net_sales > 0 ? (existing.gross_profit / existing.net_sales) * 100 : 0;
+    monthMap.set(monthKey, existing);
+  }
+
+  const byMonth = Array.from(monthMap.values()).sort((a, b) => b.month.localeCompare(a.month));
+
+  const monthLabels = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  for (const m of byMonth) {
+    const parts = m.month.split("-");
+    const monthIndex = parseInt(parts[1] || "0", 10) - 1;
+    m.label = `${monthLabels[monthIndex] || ""} ${parts[0]}`;
+  }
+
   return {
     filters: { from, to },
     rows,
     summary,
-    bySalesperson
+    bySalesperson,
+    byMonth
   };
 }
 
@@ -739,14 +790,14 @@ app.get("/", (req, res) => {
   const categories = getStoreCategoryCards(branch);
   const canonical = `${baseUrl(req)}/`;
   const logoUrl = absoluteUrl(req, "/public/logo.png");
-  const defaultWhatsappLink = `https://wa.me/${whatsappNumber(defaultWhatsappPhone)}?text=${encodeURIComponent("Hello Dotsicare, I am interested in your products. Please send me your catalog or price list.")}`;
+  const defaultWhatsappLink = `https://wa.me/${whatsappNumber(defaultWhatsappPhone)}?text=${encodeURIComponent("Hello DOT'S iCARE, I am interested in your products. Please send me your catalog or price list.")}`;
 
   res.render("store/home", {
-    title: "Dotsicare | Best iPhone & Phone Shop in Konongo, Ghana",
+    title: "DOT'S iCARE | Best iPhone & Phone Shop in Konongo, Ghana",
     description: storeSeoDescription,
-    keywords: "iPhone shop Konongo, phone shop Ghana, best phone shop Konongo, Dotsicare phones, chargers, power banks, PlayStation Ghana",
+    keywords: "iPhone shop Konongo, phone shop Ghana, best phone shop Konongo, DOT'S iCARE phones, chargers, power banks, PlayStation Ghana",
     canonical,
-    ogTitle: "Dotsicare Phone Shop in Konongo, Ghana",
+    ogTitle: "DOT'S iCARE Phone Shop in Konongo, Ghana",
     ogImage: logoUrl,
     ogType: "website",
     bodyClass: "store-body",
@@ -759,7 +810,7 @@ app.get("/", (req, res) => {
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "ElectronicsStore",
-      name: "Dotsicare",
+      name: "DOT'S iCARE",
       url: canonical,
       logo: logoUrl,
       image: logoUrl,
@@ -796,11 +847,11 @@ app.get("/store/:slug", (req, res) => {
 
   const whatsappBase = whatsappLink(req, item);
   res.render("store/detail", {
-    title: `${item.title} | Dotsicare Phone Shop Ghana`,
-    description: `${item.title} at Dotsicare ${item.branch}. Ask for current price and availability on WhatsApp. ${item.description || ""}`.slice(0, 155),
-    keywords: `${item.title}, ${item.category}, phone shop Konongo, iPhone shop Ghana, Dotsicare`,
+    title: `${item.title} | DOT'S iCARE Phone Shop Ghana`,
+    description: `${item.title} at DOT'S iCARE ${item.branch}. Ask for current price and availability on WhatsApp. ${item.description || ""}`.slice(0, 155),
+    keywords: `${item.title}, ${item.category}, phone shop Konongo, iPhone shop Ghana, DOT'S iCARE`,
     canonical: storeItemUrl(req, item),
-    ogTitle: `${item.title} | Dotsicare`,
+    ogTitle: `${item.title} | DOT'S iCARE`,
     ogImage: absoluteUrl(req, selectedImage),
     ogType: "product",
     bodyClass: "store-body",
@@ -821,7 +872,7 @@ app.get("/store/:slug", (req, res) => {
       category: item.category,
       brand: {
         "@type": "Brand",
-        name: "Dotsicare"
+        name: "DOT'S iCARE"
       }
     }
   });
@@ -1170,6 +1221,79 @@ app.post("/admin/stock", requireAdmin, (req, res) => {
     });
   }
   res.redirect("/admin?ok=1");
+});
+
+app.get("/admin/bulk", requireAdmin, (req, res) => {
+  const dv = getDistinctDeviceValues(req.branch);
+  res.render("admin/bulk-stock", {
+    error: null,
+    ok: null,
+    batches: getStockBatches(req.branch),
+    defaultBatchName: defaultStockBatchName(),
+    models: dv.models,
+    storages: dv.storages,
+    colors: dv.colors
+  });
+});
+
+app.post("/admin/bulk", requireAdmin, (req, res) => {
+  const branch = normalizeBranch(req.branch);
+  const stockBatchName = normalizeStockBatchName(req.body.stock_batch_name) || defaultStockBatchName();
+
+  // qs (extended:true) parses row[0][model] → req.body.row = [{model:...}, ...]
+  const rawRows = Array.isArray(req.body.row) ? req.body.row : [];
+
+  const validRows = rawRows.filter(
+    (r) => r && String(r.model || "").trim() && String(r.condition || "").trim() && String(r.imei1 || "").trim()
+  );
+
+  if (validRows.length === 0) {
+    const dv = getDistinctDeviceValues(branch);
+    return res.status(400).render("admin/bulk-stock", {
+      error: "Fill at least one complete row (model, condition, IMEI).",
+      ok: null,
+      batches: getStockBatches(branch),
+      defaultBatchName: stockBatchName,
+      models: dv.models,
+      storages: dv.storages,
+      colors: dv.colors
+    });
+  }
+
+  const results = [];
+  const errors = [];
+
+  for (const row of validRows) {
+    const result = insertDeviceFromBody({
+      branch,
+      model: String(row.model || "").trim(),
+      storage: String(row.storage || "").trim() || null,
+      color: String(row.color || "").trim() || null,
+      condition: String(row.condition || "").trim(),
+      cost_price: row.cost_price || 0,
+      sale_price: row.sale_price || 0,
+      imei1: String(row.imei1 || "").trim(),
+      imei2: String(row.imei2 || "").trim() || null,
+      stock_batch_name: stockBatchName,
+      created_by_user_id: req.user.id
+    });
+    if (result.ok) {
+      results.push(row.model);
+    } else {
+      errors.push((row.model || "Unknown") + ": " + result.error);
+    }
+  }
+
+  const dv = getDistinctDeviceValues(branch);
+  res.render("admin/bulk-stock", {
+    error: errors.length ? errors.join("; ") : null,
+    ok: results,
+    batches: getStockBatches(branch),
+    defaultBatchName: stockBatchName,
+    models: dv.models,
+    storages: dv.storages,
+    colors: dv.colors
+  });
 });
 
 app.get("/admin/users", requireAdmin, (req, res) => {
@@ -1669,7 +1793,8 @@ app.get("/sales/:id", requireAuth, (req, res) => {
               c.name AS customer_name,
               c.phone AS customer_phone,
               d.model AS device_model,
-              COALESCE(NULLIF(s.created_by_user_name, ''), u.name, 'Unknown') AS salesperson_name
+              COALESCE(NULLIF(s.created_by_user_name, ''), u.name, 'Unknown') AS salesperson_name,
+              (SELECT group_concat(di.imei, ', ') FROM device_imeis di WHERE di.device_id = d.id) AS device_imeis
        FROM sales s
        JOIN customers c ON c.id = s.customer_id
        JOIN devices d ON d.id = s.device_id
@@ -1692,11 +1817,16 @@ app.get("/sales/:id", requireAuth, (req, res) => {
     )
     .get({ sale_id: saleId });
 
+  const returnRecord = db.prepare(`SELECT * FROM returns WHERE sale_id = @sale_id`).get({ sale_id: saleId });
+
   const net = Math.max(0, sale.sale_price - sale.discount);
   const tradeValue = tradeIn ? tradeIn.trade_in_value : 0;
   const payable = Math.max(0, net - tradeValue);
 
-  res.render("sales/detail", { sale, plan, payments, tradeIn, currency, error: null, net, tradeValue, payable });
+  res.render("sales/detail", {
+    sale, plan, payments, tradeIn, returnRecord, currency, error: null,
+    net, tradeValue, payable
+  });
 });
 
 app.post("/sales/:id/payments", requireAuth, (req, res) => {
@@ -1736,6 +1866,133 @@ app.post("/sales/:id/payments", requireAuth, (req, res) => {
 
   tx();
   res.redirect(`/sales/${saleId}`);
+});
+
+// ─── RETURNS ───
+
+app.get("/returns", requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT r.*, s.invoice_no, c.name AS customer_name, c.phone AS customer_phone,
+              d.model AS device_model,
+              COALESCE(u.name, 'Unknown') AS created_by_name
+       FROM returns r
+       JOIN sales s ON s.id = r.sale_id
+       JOIN customers c ON c.id = s.customer_id
+       JOIN devices d ON d.id = r.device_id
+       LEFT JOIN users u ON u.id = r.created_by_user_id
+       WHERE s.branch = @branch
+       ORDER BY r.id DESC`
+    )
+    .all({ branch: req.branch });
+  res.render("returns/list", { returns: rows, currency, message: req.query.ok ? "Return saved." : null });
+});
+
+app.get("/sales/:id/return", requireAuth, (req, res) => {
+  const saleId = Number(req.params.id);
+  const sale = db
+    .prepare(
+      `SELECT s.*, c.name AS customer_name, c.phone AS customer_phone,
+              d.model AS device_model,
+              (SELECT group_concat(di.imei, ', ') FROM device_imeis di WHERE di.device_id = d.id) AS device_imeis
+       FROM sales s
+       JOIN customers c ON c.id = s.customer_id
+       JOIN devices d ON d.id = s.device_id
+       WHERE s.id = @id AND s.branch = @branch`
+    )
+    .get({ id: saleId, branch: req.branch });
+  if (!sale) return res.status(404).send("Sale not found");
+
+  const existingReturn = db.prepare(`SELECT * FROM returns WHERE sale_id = @sale_id`).get({ sale_id: saleId });
+  res.render("returns/new", { sale, existingReturn, error: null });
+});
+
+app.post("/sales/:id/return", requireAuth, (req, res) => {
+  const saleId = Number(req.params.id);
+  const reason = String(req.body.reason || "").trim();
+  const faultDescription = String(req.body.fault_description || "").trim() || null;
+  const imei = String(req.body.imei || "").trim() || null;
+  const refundAmount = moneyToInt(req.body.refund_amount) || 0;
+  const notes = String(req.body.notes || "").trim() || null;
+
+  const sale = db
+    .prepare(
+      `SELECT s.* FROM sales s
+       WHERE s.id = @id AND s.branch = @branch`
+    )
+    .get({ id: saleId, branch: req.branch });
+  if (!sale) return res.status(404).send("Sale not found");
+
+  const existingReturn = db.prepare(`SELECT * FROM returns WHERE sale_id = @sale_id`).get({ sale_id: saleId });
+
+  if (!reason) {
+    const saleForRender = db
+      .prepare(
+        `SELECT s.*, c.name AS customer_name, c.phone AS customer_phone,
+                d.model AS device_model,
+                (SELECT group_concat(di.imei, ', ') FROM device_imeis di WHERE di.device_id = d.id) AS device_imeis
+         FROM sales s JOIN customers c ON c.id = s.customer_id JOIN devices d ON d.id = s.device_id
+         WHERE s.id = @id`
+      )
+      .get({ id: saleId });
+    return res.status(400).render("returns/new", { sale: saleForRender, existingReturn, error: "Select a return reason." });
+  }
+
+  const tx = db.transaction(() => {
+    if (existingReturn) {
+      db.prepare(
+        `UPDATE returns SET reason = @reason, fault_description = @fault_description, imei = @imei,
+           refund_amount = @refund_amount, status = @status, notes = @notes, resolved_at = @resolved_at
+         WHERE id = @id`
+      ).run({
+        reason, fault_description: faultDescription, imei, refund_amount,
+        status: req.body.status || existingReturn.status,
+        notes,
+        resolved_at: (req.body.status === "Resolved" && !existingReturn.resolved_at) ? nowIso() : existingReturn.resolved_at,
+        id: existingReturn.id
+      });
+    } else {
+      db.prepare(
+        `INSERT INTO returns (sale_id, device_id, reason, fault_description, imei, refund_amount, status, notes, created_by_user_id, created_at)
+         VALUES (@sale_id, @device_id, @reason, @fault_description, @imei, @refund_amount, @status, @notes, @created_by_user_id, @created_at)`
+      ).run({
+        sale_id: saleId,
+        device_id: sale.device_id,
+        reason,
+        fault_description: faultDescription,
+        imei,
+        refund_amount: refundAmount,
+        status: "Customer Return",
+        notes,
+        created_by_user_id: req.user.id,
+        created_at: nowIso()
+      });
+    }
+
+    db.prepare(`UPDATE sales SET is_returned = 1 WHERE id = @id`).run({ id: saleId });
+    db.prepare(`UPDATE devices SET status = 'Returned' WHERE id = @device_id`).run({ device_id: sale.device_id });
+
+    //  Reverse installment if any
+    const plan = db.prepare(`SELECT * FROM installment_plans WHERE sale_id = @sale_id`).get({ sale_id: saleId });
+    if (plan && plan.status !== "PaidOff") {
+      db.prepare(`UPDATE installment_plans SET status = 'Cancelled' WHERE id = @id`).run({ id: plan.id });
+    }
+  });
+
+  tx();
+  res.redirect(`/sales/${saleId}?returned=1`);
+});
+
+app.post("/returns/:id/status", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const newStatus = String(req.body.status || "").trim();
+  const validStatuses = ["Customer Return", "Sent to Supplier", "Resolved"];
+  if (!validStatuses.includes(newStatus)) return res.status(400).send("Invalid status");
+
+  const resolvedAt = newStatus === "Resolved" ? nowIso() : null;
+  db.prepare(`UPDATE returns SET status = @status, resolved_at = @resolved_at WHERE id = @id`).run({ status: newStatus, resolved_at: resolvedAt, id });
+
+  res.redirect("/returns?ok=1");
 });
 
 app.get("/installments", requireAuth, (req, res) => {
@@ -1832,6 +2089,7 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
   const { message, template_id, save_as_template, template_name, filter } = req.body;
   const recipients = getRecipientsByFilter((filter || "overdue").toString(), req.branch);
   const selected = Array.isArray(req.body.recipient) ? req.body.recipient : req.body.recipient ? [req.body.recipient] : [];
+  const pasteNumbers = Array.isArray(req.body.paste_recipient) ? req.body.paste_recipient : req.body.paste_recipient ? [req.body.paste_recipient] : [];
 
   const templateId = template_id ? Number(template_id) : null;
   const template = templateId
@@ -1851,13 +2109,13 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
       message: ""
     });
   }
-  if (selected.length === 0) {
+  if (selected.length === 0 && pasteNumbers.length === 0) {
     return res.status(400).render("sms/center", {
       templates,
       recipients,
       filter,
       senderId: getSenderId(),
-      error: "Select at least one recipient.",
+      error: "Select at least one debtor or paste at least one contact.",
       selectedTemplateId: templateId,
       message: body
     });
@@ -1874,17 +2132,12 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
             `INSERT INTO message_templates (branch, name, body, active, created_by_user_id, created_at)
              VALUES (@branch, @name, @body, 1, @created_by_user_id, @created_at)`
           )
-          .run({
-            branch: req.branch,
-            name,
-            body,
-            created_by_user_id: req.user.id,
-            created_at: nowIso()
-          });
+          .run({ branch: req.branch, name, body, created_by_user_id: req.user.id, created_at: nowIso() });
         savedTemplateId = ins.lastInsertRowid;
       }
     }
 
+    //  Debtor recipients
     const recipientSet = new Set(selected.map((s) => Number(s)));
     for (const r of recipients) {
       if (!recipientSet.has(r.sale_id)) continue;
@@ -1899,13 +2152,60 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
       });
       queuedIds.push(id);
     }
+
+    //  Pasted contacts
+    for (const phone of pasteNumbers) {
+      const clean = String(phone).trim().replace(/^\+/, "").replace(/^0/, "233").replace(/\D/g, "");
+      if (!clean || clean.length < 10) continue;
+      const id = enqueueSms({
+        toPhone: clean,
+        body,
+        branch: req.branch,
+        customerId: null,
+        saleId: null,
+        templateId: savedTemplateId,
+        createdByUserId: req.user.id
+      });
+      queuedIds.push(id);
+    }
   });
 
   tx();
-  for (const id of queuedIds) {
-    await deliverSmsMessage(id);
+  if (queuedIds.length > 0) {
+    await deliverBulkMessages(queuedIds);
   }
-  res.redirect("/sms/logs");
+  res.redirect("/sms/logs?sent=" + queuedIds.length);
+});
+
+app.post("/sms/logs/retry/:id", requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare(`SELECT * FROM sms_messages WHERE id = @id`).get({ id });
+  if (!row) return res.status(404).send("Not found");
+
+  db.prepare(`UPDATE sms_messages SET status = @status, error_message = @error_message WHERE id = @id`).run({
+    status: "Queued",
+    error_message: null,
+    id
+  });
+
+  await deliverSmsMessage(id);
+  res.redirect("/sms/logs?retried=1");
+});
+
+app.post("/sms/logs/delete/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  db.prepare(`DELETE FROM sms_messages WHERE id = @id AND status IN ('Retry', 'Queued')`).run({ id });
+  res.redirect("/sms/logs?deleted=1");
+});
+
+app.post("/sms/logs/retry-all", requireAdmin, async (req, res) => {
+  const rows = db.prepare(`SELECT id FROM sms_messages WHERE status = 'Retry' ORDER BY id`).all();
+  const ids = rows.map((r) => r.id);
+  if (ids.length > 0) {
+    db.prepare(`UPDATE sms_messages SET status = 'Queued', error_message = NULL WHERE id IN (${ids.map(() => "?").join(",")})`).run(...ids);
+    await deliverBulkMessages(ids);
+  }
+  res.redirect(`/sms/logs?retried=${ids.length}`);
 });
 
 app.get("/sms/templates", requireAdmin, (req, res) => {
@@ -1937,7 +2237,7 @@ app.get("/sms/logs", requireAdmin, (req, res) => {
        LIMIT 200`
     )
     .all({ branch: req.branch });
-  res.render("sms/logs", { logs });
+  res.render("sms/logs", { logs, query: req.query });
 });
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3000;

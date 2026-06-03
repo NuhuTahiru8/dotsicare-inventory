@@ -1,4 +1,4 @@
-﻿<%- include("../partials/head", { title: "Admin Dashboard" }) %>
+<%- include("../partials/head", { title: "Admin Dashboard" }) %>
 <%- include("../partials/nav") %>
 
 <div class="row">
@@ -9,6 +9,7 @@
     <% } %>
   </div>
   <div class="row-actions">
+    <a class="btn" href="/admin/bulk">+ Bulk Stock</a>
     <a class="btn secondary" href="/admin/users">Manage Users</a>
     <a class="btn secondary" href="/inventory">View Inventory</a>
   </div>

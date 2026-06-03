@@ -143,6 +143,23 @@ CREATE TABLE IF NOT EXISTS message_templates (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS returns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sale_id INTEGER NOT NULL UNIQUE,
+  device_id INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  fault_description TEXT,
+  imei TEXT,
+  refund_amount INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'Customer Return',
+  notes TEXT,
+  created_by_user_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  resolved_at TEXT,
+  FOREIGN KEY (sale_id) REFERENCES sales(id),
+  FOREIGN KEY (device_id) REFERENCES devices(id)
+);
+
 CREATE TABLE IF NOT EXISTS sms_messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   branch TEXT NOT NULL DEFAULT 'Konongo',
