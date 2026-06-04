@@ -19,27 +19,7 @@
   <div class="grid">
     <label>
       Model *
-      <input name="model" id="modelInput" required oninput="checkStock()" />
-      <div id="stockInfo" style="font-size:13px;margin-top:3px;"></div>
-      <script>
-        var stockTimer = null;
-        function checkStock() {
-          clearTimeout(stockTimer);
-          stockTimer = setTimeout(function() {
-            var m = document.getElementById("modelInput").value.trim().toLowerCase();
-            var el = document.getElementById("stockInfo");
-            if (!m) { el.innerHTML = ""; return; }
-            fetch("/api/stock-lookup?q=" + encodeURIComponent(m))
-              .then(function(r) { return r.json(); })
-              .then(function(rows) {
-                var total = 0;
-                rows.forEach(function(r) { total += r.count; });
-                if (total > 0) el.innerHTML = "<span style=color:#22c55e>" + total + " in stock. Adding will total " + (total+1) + ".</span>";
-                else el.innerHTML = "<span style=color:#6b7280>New model</span>";
-              });
-          }, 300);
-        }
-      </script>
+      <input name="model" id="modelInput" required oninput="checkStock()" /><div id="stockInfo" style="font-size:13px;margin-top:3px;"></div><script>var tmr=null;function checkStock(){clearTimeout(tmr);tmr=setTimeout(function(){var m=document.getElementById("modelInput").value.trim().toLowerCase();var e=document.getElementById("stockInfo");if(!m){e.innerHTML="";return;}fetch("/api/stock-lookup?q="+encodeURIComponent(m)).then(function(r){return r.json()}).then(function(rows){var c=0;rows.forEach(function(r){c+=r.cnt});if(c>0)e.innerHTML="<span style=color:#22c55e>"+c+" in stock</span>";else e.innerHTML="<span style=color:#6b7280>New</span>"})},300)}</script>
     </label>
     <label>
       Storage

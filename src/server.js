@@ -911,6 +911,7 @@ function insertDeviceFromBody(body) {
   const branch = normalizeBranch(body.branch);
   const { model, storage, color, condition, cost_price, sale_price, imei1, imei2, stock_batch_name } = body;
   const cost = moneyToInt(cost_price);
+  if (cost < 0 || sale < 0) return { ok: false, error: "Price cannot be negative" };
   const sale = moneyToInt(sale_price);
   const imeis = [imei1, imei2].map((v) => (v || "").trim()).filter(Boolean);
 
@@ -973,6 +974,7 @@ function getDeviceWithImeis(id, branch) {
 function updateDeviceFromBody(id, branch, body) {
   const { model, storage, color, condition, cost_price, sale_price, imei1, imei2, stock_batch_name } = body;
   const cost = moneyToInt(cost_price);
+  if (cost < 0 || sale < 0) return { ok: false, error: "Price cannot be negative" };
   const sale = moneyToInt(sale_price);
   const imeis = [imei1, imei2].map((v) => (v || "").trim()).filter(Boolean);
 
@@ -1468,14 +1470,6 @@ app.get("/inventory", requireAuth, (req, res) => {
     message: req.query.updated === "1" ? "Stock updated successfully." : req.query.deleted === "1" ? "Stock deleted successfully." : null,
     error: req.query.error || null
   });
-});
-
-
-app.get("/api/stock-lookup", requireAuth, (req, res) => {
-  var q = String(req.query.q || "").trim().toLowerCase();
-  if (!q) return res.json([]);
-  var rows = db.prepare("SELECT model, storage, color, COUNT(*) as count FROM devices WHERE branch = @branch AND status = 'InStock' AND lower(model) = @q GROUP BY model, storage, color").all({ branch: req.branch, q: q });
-  res.json(rows);
 });
 
 app.get("/inventory/new", requireAdmin, (req, res) => {

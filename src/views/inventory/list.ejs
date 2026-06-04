@@ -7,113 +7,93 @@
 </div>
 
 <%
-  var data = [];
-  var totalIn = 0, totalSold = 0;
-  var catIn = {iOS:0,Android:0,Accessory:0}, catSold = {iOS:0,Android:0,Accessory:0};
-  var allModels = new Set(), allStorages = new Set(), allColors = new Set();
-
+  var totalStock = 0, totalSold = 0;
+  var catCount = { iOS:0, Android:0, Accessory:0 };
+  var modelCount = {};
+  var soldByModel = {};
+  var allModels = {};
+  
   items.forEach(function(d) {
-    var c = d.product_type === "Accessory" ? "Accessory" : (d.os || "Other");
-    var entry = {
-      model: d.model, storage: d.storage||"", color: d.color||"", type: d.product_type||"", os: c,
-      in_stock: d.in_stock||0, sold: d.sold||0, price: d.sale_price||0
-    };
-    data.push(entry);
-    totalIn += entry.in_stock; totalSold += entry.sold;
-    catIn[c] += entry.in_stock; catSold[c] += entry.sold;
-    allModels.add(d.model);
-    if (d.storage) allStorages.add(d.storage);
-    if (d.color) allColors.add(d.color);
+    totalStock += d.in_stock || 0;
+    totalSold += d.sold || 0;
+    
+    var cat = d.product_type === "Accessory" ? "Accessory" : (d.os || "Other");
+    catCount[cat] = (catCount[cat] || 0) + (d.in_stock || 0);
+    
+    var key = d.model + " " + (d.storage||"");
+    modelCount[key] = (modelCount[key] || 0) + (d.in_stock || 0);
+    if (d.sold > 0) soldByModel[key] = (soldByModel[key] || 0) + d.sold;
+    allModels[key] = 1;
   });
+  
+  var sortedModels = Object.keys(modelCount).sort();
 %>
 
-<style>
-.cat-card { cursor:pointer; transition:all .2s; border:2px solid transparent; }
-.cat-card:hover { transform:translateY(-2px); }
-.cat-card.active { border-color:#0f2d62 !important; }
-.filter-select { padding:8px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:13px; background:#fff; }
-</style>
-
-<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px;">
-  <div class="cat-card active" onclick="switchView('in')" id="card-in" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #22c55e;border-radius:14px;padding:20px;text-align:center;">
-    <div style="font-size:12px;color:#16a34a;text-transform:uppercase;letter-spacing:1px;font-weight:600;">In Stock</div>
-    <div style="font-size:40px;font-weight:800;color:#15803d;"><%= totalIn %></div>
-    <div style="font-size:11px;color:#16a34a;margin-top:4px;">iOS:<%=catIn.iOS%> | Android:<%=catIn.Android%> | Acc:<%=catIn.Accessory%></div>
+<!-- Stock Overview Cards -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
+  <div style="background:#f0fdf4;border:2px solid #22c55e;border-radius:12px;padding:20px;text-align:center;">
+    <div style="font-size:36px;font-weight:800;color:#15803d;"><%= totalStock %></div>
+    <div style="font-size:13px;color:#16a34a;font-weight:600;">In Stock</div>
   </div>
-  <div class="cat-card" onclick="switchView('sold')" id="card-sold" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border-radius:14px;padding:20px;text-align:center;">
-    <div style="font-size:12px;color:#dc2626;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Sold</div>
-    <div style="font-size:40px;font-weight:800;color:#b91c1c;"><%= totalSold %></div>
-    <div style="font-size:11px;color:#dc2626;margin-top:4px;">iOS:<%=catSold.iOS%> | Android:<%=catSold.Android%> | Acc:<%=catSold.Accessory%></div>
+  <div style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:20px;text-align:center;">
+    <div style="font-size:36px;font-weight:800;color:#b91c1c;"><%= totalSold %></div>
+    <div style="font-size:13px;color:#dc2626;font-weight:600;">Sold</div>
+  </div>
+  <div style="background:#eff6ff;border:2px solid #3b82f6;border-radius:12px;padding:20px;text-align:center;">
+    <div style="font-size:14px;color:#1d4ed8;margin-bottom:6px;font-weight:600;">By Type</div>
+    <div style="font-size:13px;color:#1e40af;line-height:1.8;">
+      iOS: <strong><%= catCount.iOS||0 %></strong><br>
+      Android: <strong><%= catCount.Android||0 %></strong><br>
+      Acc: <strong><%= catCount.Accessory||0 %></strong>
+    </div>
+  </div>
+  <div style="background:#f8fafc;border:2px solid #64748b;border-radius:12px;padding:20px;text-align:center;">
+    <div style="font-size:14px;color:#475569;margin-bottom:6px;font-weight:600;">Models</div>
+    <div style="font-size:28px;font-weight:800;color:#0f2d62;"><%= sortedModels.length %></div>
   </div>
 </div>
 
-<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-  <select class="filter-select" id="fOS" onchange="render()">
-    <option value="all">All Types</option>
-    <option value="iOS">iOS</option>
-    <option value="Android">Android</option>
-    <option value="Accessory">Accessories</option>
-  </select>
-  <select class="filter-select" id="fModel" onchange="render()">
-    <option value="all">All Models</option>
-    <% Array.from(allModels).sort().forEach(function(m) { %><option value="<%= m %>"><%= m %></option><% }); %>
-  </select>
-  <select class="filter-select" id="fStorage" onchange="render()">
-    <option value="all">All Storage</option>
-    <% Array.from(allStorages).sort().forEach(function(s) { %><option value="<%= s %>"><%= s %></option><% }); %>
-  </select>
-  <select class="filter-select" id="fColor" onchange="render()">
-    <option value="all">All Colors</option>
-    <% Array.from(allColors).sort().forEach(function(c) { %><option value="<%= c %>"><%= c %></option><% }); %>
-  </select>
-  <span style="font-size:12px;color:#6b7280;margin-left:auto;line-height:36px;" id="count"></span>
+<!-- Per Model Breakdown -->
+<div style="margin-bottom:16px;">
+  <h3 style="color:#0f2d62;font-size:16px;margin-bottom:8px;">Per Model</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
+    <% sortedModels.forEach(function(k) { %>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;border:1px solid #e5e7eb;">
+        <span style="font-weight:600;"><%= k %></span>
+        <span style="font-weight:800;color:#0f2d62;"><%= modelCount[k] %> <% if (soldByModel[k] > 0) { %><span style="font-size:10px;color:#ef4444;font-weight:400;"> -<%= soldByModel[k] %></span><% } %></span>
+      </div>
+    <% }); %>
+  </div>
 </div>
 
-<div id="list"></div>
+<!-- Clean Table -->
+<table style="width:100%;border-collapse:collapse;font-size:14px;">
+  <thead>
+    <tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="text-align:left;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Model</th>
+      <th style="text-align:left;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Storage</th>
+      <th style="text-align:center;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Qty</th>
+      <th style="text-align:right;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Price</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% items.forEach(function(d) { %>
+      <tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:10px 8px;">
+          <span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:4px;margin-right:6px;"><%= d.product_type||"-" %></span>
+          <strong><%= d.model %></strong>
+        </td>
+        <td style="padding:10px 8px;color:#6b7280;"><%= d.storage||"-" %></td>
+        <td style="padding:10px 8px;text-align:center;">
+          <span style="font-weight:700;font-size:16px;color:#0f2d62;"><%= d.in_stock||0 %></span>
+          <% if (d.sold > 0) { %><span style="font-size:11px;color:#ef4444;margin-left:4px;">(-<%= d.sold %>)</span><% } %>
+        </td>
+        <td style="padding:10px 8px;text-align:right;font-weight:600;">&#8373;<%= Number(d.sale_price||0).toLocaleString() %></td>
+      </tr>
+    <% }); %>
+  </tbody>
+</table>
 
-<script>
-var DATA = <%= JSON.stringify(data) %>;
-var view = 'in';
-
-function switchView(v) { view = v; document.getElementById('card-in').classList.toggle('active',v==='in'); document.getElementById('card-sold').classList.toggle('active',v==='sold'); render(); }
-
-function render() {
-  var os = document.getElementById('fOS').value;
-  var model = document.getElementById('fModel').value;
-  var storage = document.getElementById('fStorage').value;
-  var color = document.getElementById('fColor').value;
-  
-  var filtered = DATA.filter(function(d) {
-    if (os !== 'all' && d.os !== os) return false;
-    if (model !== 'all' && d.model !== model) return false;
-    if (storage !== 'all' && d.storage !== storage) return false;
-    if (color !== 'all' && d.color !== color) return false;
-    var val = view === 'sold' ? d.sold : d.in_stock;
-    return val > 0;
-  });
-  
-  var html = '';
-  var total = 0;
-  
-  filtered.forEach(function(d) {
-    var val = view === 'sold' ? d.sold : d.in_stock;
-    total += val;
-    var vColor = view === 'sold' ? '#b91c1c' : '#15803d';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fff;border:1px solid #f3f4f6;border-radius:12px;margin-bottom:4px;">';
-    html += '<div>';
-    html += '<span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:4px;margin-right:8px;">' + d.type + '</span>';
-    html += '<strong>' + d.model + '</strong>';
-    html += ' <span style="font-size:12px;color:#9ca3af;">' + d.storage + ' ' + d.color + '</span>';
-    html += '</div>';
-    html += '<div style="text-align:right;">';
-    html += '<span style="font-size:22px;font-weight:800;color:' + vColor + ';">' + val + '</span>';
-    html += '<div style="font-size:11px;color:#6b7280;">GHS ' + Number(d.price).toLocaleString() + '</div>';
-    html += '</div></div>';
-  });
-  
-  document.getElementById('list').innerHTML = html || '<div style="text-align:center;color:#999;padding:40px;">No items match</div>';
-  document.getElementById('count').textContent = total + ' units | ' + filtered.length + ' variants';
-}
-
-render();
-</script>
+<% if (items.length === 0) { %>
+  <div style="text-align:center;color:#999;padding:40px;">No stock yet.</div>
+<% } %>
