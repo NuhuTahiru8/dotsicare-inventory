@@ -2115,6 +2115,31 @@ app.get("/credits", requireAdmin, (req, res) => {
   res.render("credits", { smsCredits });
 });
 
+
+// Internal API: Add SMS credits (called by BusinessHelpy after payment)
+app.post("/api/internal/add-credits", (req, res) => {
+  const secret = req.headers["x-api-secret"] || "";
+  if (secret !== process.env.API_SECRET) {
+    return res.status(403).json({ status: "error", message: "Unauthorized" });
+  }
+  const { phone, credits } = req.body;
+  if (!phone || !credits) {
+    return res.status(400).json({ status: "error", message: "Missing phone or credits" });
+  }
+  // Find user by phone/username
+  const norm = phone.toString().replace(/\+/g, "").trim();
+  const user = db.prepare("SELECT id, sms_credits FROM users WHERE name LIKE @phone OR name = @phone2")
+    .get({ phone: "%" + norm.slice(-9), phone2: norm });
+  if (!user) {
+    return res.status(404).json({ status: "error", message: "User not found" });
+  }
+  db.prepare("UPDATE users SET sms_credits = sms_credits + @credits WHERE id = @id")
+    .run({ credits: Number(credits), id: user.id });
+  const updated = db.prepare("SELECT sms_credits FROM users WHERE id = @id").get({ id: user.id });
+  res.json({ status: "success", phone, credits_added: Number(credits), new_balance: updated.sms_credits });
+});
+
+
 app.get("/sms", requireAdmin, (req, res) => {
   const templates = db.prepare(`SELECT * FROM message_templates WHERE branch = @branch AND active = 1 ORDER BY id DESC`).all({ branch: req.branch });
   const filter = (req.query.filter || "overdue").toString();
