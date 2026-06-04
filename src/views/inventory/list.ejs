@@ -6,6 +6,21 @@
     <h1>Inventory</h1>
     <% if (currentBranch) { %>
       <div class="muted"><%= currentBranch.name %> stock only</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin:16px 0 24px;">
+    <% 
+      var stockSummary = {};
+      items.forEach(function(d) {
+        var key = d.model + " " + (d.storage || "") + " " + (d.color || "");
+        if (!stockSummary[key]) stockSummary[key] = 0;
+        stockSummary[key]++;
+      });
+      Object.keys(stockSummary).sort().forEach(function(k) { %>
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 12px;font-size:13px;">
+          <strong><%= k %></strong>: <%= stockSummary[k] %> in stock
+        </div>
+    <% }); %>
+  </div>
+
     <% } %>
   </div>
   <a class="btn" href="/inventory/new">Add Stock</a>
@@ -39,7 +54,7 @@
   <tbody>
     <% for (const d of items) { %>
       <tr>
-        <td><%= d.id %></td>
+        <td><%= d.first_id %></td>
         <td><%= d.model %></td>
         <td><%= [d.storage, d.color].filter(Boolean).join(" / ") %></td>
         <td><%= d.condition %></td>
@@ -51,8 +66,8 @@
         <% if (currentUser && currentUser.role === "Admin") { %>
           <td>
             <div class="table-actions">
-              <a class="btn small secondary" href="/inventory/<%= d.id %>/edit">Edit</a>
-              <form method="post" action="/inventory/<%= d.id %>/delete" onsubmit="return confirm('Delete this stock item? This cannot be undone.');">
+              <a class="btn small secondary" href="/inventory/<%= d.first_id %>/edit">Edit</a>
+              <form method="post" action="/inventory/<%= d.first_id %>/delete" onsubmit="return confirm('Delete this stock item? This cannot be undone.');">
                 <button class="btn small danger" type="submit" <%= d.status !== "InStock" ? "disabled" : "" %>>Delete</button>
               </form>
             </div>
