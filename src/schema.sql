@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS customers (
   id_held_at TEXT,
   id_storage_location TEXT,
   id_returned_at TEXT,
+  customer_type TEXT NOT NULL DEFAULT 'Customer',
+  ghana_card TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

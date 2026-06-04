@@ -1072,3 +1072,88 @@ body.lightbox-open { overflow: hidden; }
 @media screen {
   .screen-only { display: block; }
 }
+
+/* ─── SEARCHABLE DROPDOWN ─── */
+.searchable-wrap {
+  position: relative;
+  flex: 1;
+}
+.searchable-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 14px;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.searchable-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+}
+.searchable-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+  display: none;
+}
+.searchable-results.open {
+  display: block;
+}
+.searchable-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  transition: background 0.1s;
+}
+.searchable-item:last-child { border-bottom: 0; }
+.searchable-item:hover,
+.searchable-item.highlight {
+  background: rgba(0, 122, 255, 0.06);
+}
+.searchable-item .s-model {
+  font-weight: 700;
+  color: var(--ink);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.searchable-item .s-variant {
+  color: var(--muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.searchable-item .s-imei {
+  color: var(--blue);
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 11px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.searchable-empty {
+  padding: 16px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.searchable-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}

@@ -16,6 +16,7 @@
       <tr>
         <th>Invoice</th>
         <th>Customer</th>
+        <th>Dealer</th>
         <th>Device</th>
         <th>IMEI</th>
         <th>Reason</th>
@@ -33,6 +34,19 @@
         <tr>
           <td class="mono"><a href="/sales/<%= r.sale_id %>"><%= r.invoice_no %></a></td>
           <td><%= r.customer_name %></td>
+          <td>
+            <% if (r.customer_type === "Dealer") { %>
+              <span class="pill warn">Dealer</span>
+              <% if (r.id_held) { %>
+                <br /><small class="mono"><%= r.ghana_card || "Ghana Card" %></small>
+                <br /><span class="pill danger" style="font-size: 10px;">ID Held</span>
+              <% } else { %>
+                <br /><span class="pill ok" style="font-size: 10px;">Paid Full</span>
+              <% } %>
+            <% } else { %>
+              <span class="muted">-</span>
+            <% } %>
+          </td>
           <td><%= r.device_model %></td>
           <td class="mono"><%= r.imei || "-" %></td>
           <td><%= r.reason %></td>
@@ -57,7 +71,7 @@
       <% } %>
       <% if (returns.length === 0) { %>
         <tr>
-          <td colspan="<%= currentUser && currentUser.role === 'Admin' ? 10 : 9 %>" class="muted">No returns recorded yet.</td>
+          <td colspan="<%= currentUser && currentUser.role === 'Admin' ? 11 : 10 %>" class="muted">No returns recorded yet.</td>
         </tr>
       <% } %>
     </tbody>

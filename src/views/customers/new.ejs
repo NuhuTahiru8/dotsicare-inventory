@@ -2,7 +2,7 @@
 <%- include("../partials/nav") %>
 
 <div class="row">
-  <h1>Add Customer</h1>
+  <h1>Add Customer / Dealer</h1>
   <a class="btn secondary" href="/customers">Back</a>
 </div>
 
@@ -12,28 +12,48 @@
 
 <form class="form" method="post" action="/customers/new">
   <div class="grid">
+    <label class="span-2">
+      Type *
+      <div style="display: flex; gap: 10px; margin-top: 4px;">
+        <label class="inline" style="margin-bottom: 0;">
+          <input type="radio" name="customer_type" value="Customer" checked onchange="toggleDealer()" /> Customer
+        </label>
+        <label class="inline" style="margin-bottom: 0;">
+          <input type="radio" name="customer_type" value="Dealer" onchange="toggleDealer()" /> Dealer (Bulk Buyer)
+        </label>
+      </div>
+    </label>
     <label>
       Full Name *
-      <input name="name" required />
+      <input name="name" required placeholder="Full name" />
     </label>
     <label>
       Phone *
-      <input name="phone" required />
+      <input name="phone" required placeholder="020XXXXXXXX" />
+    </label>
+    <label>
+      Ghana Card Number
+      <input name="ghana_card" placeholder="GHA-XXXXXXXXX-X" class="mono" />
     </label>
     <label>
       Address
-      <input name="address" />
+      <input name="address" placeholder="Konongo, Ashanti" />
     </label>
-    <label>
-      ID Type
-      <input name="id_type" placeholder="NIN, Voter's Card, Driver's License" />
-    </label>
-    <label>
-      ID Number
-      <input name="id_number" />
-    </label>
+    <div id="dealerFields" style="display: none;">
+      <label>
+        <input type="checkbox" name="id_held" value="1" /> Hold Ghana Card
+        <span class="hint">Check if dealer is paying later (installment).</span>
+      </label>
+    </div>
   </div>
   <button class="btn" type="submit">Save</button>
 </form>
+
+<script>
+function toggleDealer() {
+  var isDealer = document.querySelector('input[name="customer_type"]:checked')?.value === "Dealer";
+  document.getElementById("dealerFields").style.display = isDealer ? "block" : "none";
+}
+</script>
 
 <%- include("../partials/foot") %>

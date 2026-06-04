@@ -1,38 +1,115 @@
-<%- include("../partials/head", { title: "Customers" }) %>
+<%- include("../partials/head", { title: "Customers & Dealers" }) %>
 <%- include("../partials/nav") %>
 
 <div class="row">
-  <h1>Customers</h1>
-  <a class="btn" href="/customers/new">Add Customer</a>
+  <h1 id="listTitle">Customers</h1>
+  <div class="row-actions">
+    <button class="btn" id="tabCustomerBtn" onclick="switchTab('Customer')">Customers</button>
+    <button class="btn secondary" id="tabDealerBtn" onclick="switchTab('Dealer')">Dealers</button>
+    <a class="btn" href="/customers/new">Add Customer</a>
+  </div>
 </div>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Name</th>
-      <th>Phone</th>
-      <th>ID Held</th>
-      <th>Created</th>
-    </tr>
-  </thead>
-  <tbody>
-    <% for (const c of customers) { %>
-      <tr>
-        <td><%= c.id %></td>
-        <td><%= c.name %></td>
-        <td class="mono"><%= c.phone %></td>
-        <td>
-          <% if (c.id_held) { %>
-            <span class="pill warn">Held</span>
-          <% } else { %>
-            <span class="pill ok">No</span>
-          <% } %>
-        </td>
-        <td><%= (c.created_at || "").slice(0, 10) %></td>
-      </tr>
+<% if (message) { %>
+  <div class="pill ok"><%= message %></div>
+<% } %>
+
+<div id="tabCustomer" class="tab-content">
+  <div class="panel">
+    <div class="row">
+      <h2>Customers</h2>
+      <div class="muted"><%= customers.length %> customer(s)</div>
+    </div>
+    <table class="table compact">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Address</th>
+          <th>ID</th>
+          <th>Created</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const c of customers) { %>
+          <tr>
+            <td><strong><%= c.name %></strong></td>
+            <td class="mono"><%= c.phone %></td>
+            <td><%= c.address || "-" %></td>
+            <td><%= c.id_type || "-" %> <%= c.id_number ? "(" + c.id_number + ")" : "" %></td>
+            <td><%= (c.created_at || "").slice(0, 10) %></td>
+            <td>
+              <a class="btn small secondary" href="/customers/<%= c.id %>/edit">Edit</a>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+    <% if (customers.length === 0) { %>
+      <p class="muted" style="text-align: center;">No customers yet.</p>
     <% } %>
-  </tbody>
-</table>
+  </div>
+</div>
+
+<div id="tabDealer" class="tab-content" style="display: none;">
+  <div class="panel">
+    <div class="row">
+      <h2>Dealers <span class="muted" style="font-size: 14px; font-weight: 500;">(Bulk buyers)</span></h2>
+      <div class="muted"><%= dealers.length %> dealer(s)</div>
+    </div>
+    <table class="table compact">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Ghana Card</th>
+          <th>ID Held</th>
+          <th>Address</th>
+          <th>Created</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const d of dealers) { %>
+          <tr>
+            <td><strong><%= d.name %></strong></td>
+            <td class="mono"><%= d.phone %></td>
+            <td class="mono"><%= d.ghana_card || "-" %></td>
+            <td>
+              <% if (d.id_held) { %>
+                <span class="pill warn">Held</span>
+              <% } else { %>
+                <span class="pill ok">No</span>
+              <% } %>
+            </td>
+            <td><%= d.address || "-" %></td>
+            <td><%= (d.created_at || "").slice(0, 10) %></td>
+            <td>
+              <a class="btn small secondary" href="/customers/<%= d.id %>/edit">Edit</a>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+    <% if (dealers.length === 0) { %>
+      <p class="muted" style="text-align: center;">No dealers yet.</p>
+    <% } %>
+  </div>
+</div>
+
+<script>
+function switchTab(type) {
+  document.getElementById("tabCustomer").style.display = type === "Customer" ? "block" : "none";
+  document.getElementById("tabDealer").style.display = type === "Dealer" ? "block" : "none";
+  document.getElementById("tabCustomerBtn").className = "btn" + (type === "Customer" ? "" : " secondary");
+  document.getElementById("tabDealerBtn").className = "btn" + (type === "Dealer" ? "" : " secondary");
+  document.getElementById("listTitle").textContent = type === "Dealer" ? "Dealers" : "Customers";
+}
+
+// restore tab from localStorage
+var lastTab = localStorage.getItem("customers_tab") || "Customer";
+switchTab(lastTab);
+</script>
 
 <%- include("../partials/foot") %>

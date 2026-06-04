@@ -720,7 +720,7 @@ app.post("/setup", (req, res) => {
   const name = (req.body.name || "").toString().trim();
   const password = (req.body.password || "").toString();
   if (!name || password.length < 6) {
-    return res.status(400).render("auth/setup", { error: "Enter username and password (min 6 characters)." });
+    return res.status(400).render("auth/setup", { error: "Enter a username and password (6+ characters)." });
   }
 
   const { password_salt, password_hash } = hashPassword(password);
@@ -748,7 +748,7 @@ app.post("/login", (req, res) => {
   const password = (req.body.password || "").toString();
   const branch = normalizeBranch(req.body.branch);
   if (!branch) {
-    return renderLogin(res.status(400), { error: "Choose Konongo or Agogo shop.", selectedBranch: req.body.branch });
+    return renderLogin(res.status(400), { error: "Pick a shop.", selectedBranch: req.body.branch });
   }
 
   const user = findUserForLogin(name);
@@ -905,11 +905,11 @@ function insertDeviceFromBody(body) {
   const imeis = [imei1, imei2].map((v) => (v || "").trim()).filter(Boolean);
 
   if (!branch) {
-    return { ok: false, error: "Choose a valid shop before adding stock." };
+    return { ok: false, error: "Pick a shop first." };
   }
 
   if (!model || !condition || cost == null || sale == null || imeis.length === 0) {
-    return { ok: false, error: "Fill required fields and at least 1 IMEI." };
+    return { ok: false, error: "Model, condition, cost, price and IMEI are required." };
   }
 
   const tx = db.transaction(() => {
@@ -967,7 +967,7 @@ function updateDeviceFromBody(id, branch, body) {
   const imeis = [imei1, imei2].map((v) => (v || "").trim()).filter(Boolean);
 
   if (!model || !condition || cost == null || sale == null || imeis.length === 0) {
-    return { ok: false, error: "Fill required fields and at least 1 IMEI." };
+    return { ok: false, error: "Model, condition, cost, price and IMEI are required." };
   }
 
   const existing = getDeviceWithImeis(id, branch);
@@ -1098,7 +1098,7 @@ app.post("/admin/store", requireAdmin, (req, res) => {
     return res.status(400).render("admin/store", {
       listings,
       categories: storeCategories,
-      error: "Enter a title and at least one image link.",
+      error: "Add a title and at least 1 image.",
       message: null,
       form: { ...form, image_urls: images.join("\n") }
     });
@@ -1143,7 +1143,7 @@ app.post("/admin/store/:id/edit", requireAdmin, (req, res) => {
     return res.status(400).render("admin/store-edit", {
       item: { ...existing, ...form, image_urls: images.join("\n") },
       categories: storeCategories,
-      error: "Enter a title and at least one image link."
+      error: "Add a title and at least 1 image."
     });
   }
 
@@ -1250,7 +1250,7 @@ app.post("/admin/bulk", requireAdmin, (req, res) => {
   if (validRows.length === 0) {
     const dv = getDistinctDeviceValues(branch);
     return res.status(400).render("admin/bulk-stock", {
-      error: "Fill at least one complete row (model, condition, IMEI).",
+      error: "Each row needs model, condition, and IMEI.",
       ok: null,
       batches: getStockBatches(branch),
       defaultBatchName: stockBatchName,
@@ -1314,12 +1314,12 @@ app.post("/admin/users", requireAdmin, (req, res) => {
   const password = (req.body.password || "").toString();
 
   if (!name || !["Admin", "Employee"].includes(role) || password.length < 6) {
-    return renderAdminUsers(res, { status: 400, error: "Enter name, role, and password (min 6)." });
+    return renderAdminUsers(res, { status: 400, error: "Enter name, role, and password (6+ characters)." });
   }
 
   const existing = db.prepare(`SELECT id FROM users WHERE lower(name) = lower(@name)`).get({ name });
   if (existing) {
-    return renderAdminUsers(res, { status: 400, error: "A user with that name already exists." });
+    return renderAdminUsers(res, { status: 400, error: "Username taken." });
   }
 
   const { password_salt, password_hash } = hashPassword(password);
@@ -1341,7 +1341,7 @@ app.post("/admin/users/:id/password", requireAdmin, (req, res) => {
 
   if (!target) return renderAdminUsers(res, { status: 404, error: "User not found." });
   if (password.length < 6) {
-    return renderAdminUsers(res, { status: 400, error: "Password must be at least 6 characters." });
+    return renderAdminUsers(res, { status: 400, error: "Password: 6+ characters." });
   }
 
   const { password_salt, password_hash } = hashPassword(password);
@@ -1361,12 +1361,12 @@ app.post("/admin/users/:id/delete", requireAdmin, (req, res) => {
 
   if (!target) return renderAdminUsers(res, { status: 404, error: "User not found." });
   if (target.id === req.user.id) {
-    return renderAdminUsers(res, { status: 400, error: "You cannot delete the account you are currently using." });
+    return renderAdminUsers(res, { status: 400, error: "Can't delete your own account." });
   }
   if (target.role === "Admin") {
     const adminCount = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE role = 'Admin'`).get().c;
     if (adminCount <= 1) {
-      return renderAdminUsers(res, { status: 400, error: "At least one admin account must remain." });
+      return renderAdminUsers(res, { status: 400, error: "Keep at least 1 admin." });
     }
   }
 
@@ -1466,8 +1466,9 @@ app.post("/inventory/:id/delete", requireAdmin, (req, res) => {
 });
 
 app.get("/customers", requireAuth, (req, res) => {
-  const customers = db.prepare(`SELECT * FROM customers WHERE branch = @branch ORDER BY id DESC`).all({ branch: req.branch });
-  res.render("customers/list", { customers });
+  const customers = db.prepare(`SELECT * FROM customers WHERE branch = @branch AND (customer_type IS NULL OR customer_type = 'Customer') ORDER BY id DESC`).all({ branch: req.branch });
+  const dealers = db.prepare(`SELECT * FROM customers WHERE branch = @branch AND customer_type = 'Dealer' ORDER BY id DESC`).all({ branch: req.branch });
+  res.render("customers/list", { customers, dealers, message: req.query.updated ? "Customer updated." : null });
 });
 
 app.get("/customers/new", requireAuth, (req, res) => {
@@ -1475,11 +1476,14 @@ app.get("/customers/new", requireAuth, (req, res) => {
 });
 
 app.post("/customers/new", requireAuth, (req, res) => {
-  const { name, phone, address, id_type, id_number } = req.body;
-  if (!name || !phone) return res.status(400).render("customers/new", { error: "Name and phone are required." });
+  const { name, phone, address, id_type, id_number, customer_type, ghana_card, id_held } = req.body;
+  if (!name || !phone) return res.status(400).render("customers/new", { error: "Enter name and phone." });
+  const type = customer_type === "Dealer" ? "Dealer" : "Customer";
+  const card = String(ghana_card || "").trim() || null;
+  const holdId = id_held === "1" || id_held === "on";
   db.prepare(
-    `INSERT INTO customers (branch, name, phone, address, id_type, id_number, created_at)
-     VALUES (@branch, @name, @phone, @address, @id_type, @id_number, @created_at)`
+    `INSERT INTO customers (branch, name, phone, address, id_type, id_number, customer_type, ghana_card, id_held, id_held_at, created_at)
+     VALUES (@branch, @name, @phone, @address, @id_type, @id_number, @customer_type, @ghana_card, @id_held, @id_held_at, @created_at)`
   ).run({
     branch: req.branch,
     name,
@@ -1487,9 +1491,46 @@ app.post("/customers/new", requireAuth, (req, res) => {
     address: address || null,
     id_type: id_type || null,
     id_number: id_number || null,
+    customer_type: type,
+    ghana_card: card,
+    id_held: holdId ? 1 : 0,
+    id_held_at: holdId ? nowIso() : null,
     created_at: nowIso()
   });
   res.redirect("/customers");
+});
+
+app.get("/customers/:id/edit", requireAuth, (req, res) => {
+  const customer = db.prepare(`SELECT * FROM customers WHERE id = @id AND branch = @branch`).get({ id: Number(req.params.id), branch: req.branch });
+  if (!customer) return res.status(404).send("Customer not found");
+  res.render("customers/edit", { customer, error: null });
+});
+
+app.post("/customers/:id/edit", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const customer = db.prepare(`SELECT * FROM customers WHERE id = @id AND branch = @branch`).get({ id, branch: req.branch });
+  if (!customer) return res.status(404).send("Customer not found");
+
+  const { name, phone, address, id_type, id_number, customer_type, ghana_card, id_held } = req.body;
+  if (!name || !phone) return res.status(400).render("customers/edit", { customer, error: "Enter name and phone." });
+  const type = customer_type === "Dealer" ? "Dealer" : "Customer";
+  const card = String(ghana_card || "").trim() || null;
+  const holdId = id_held === "1" || id_held === "on";
+  db.prepare(
+    `UPDATE customers SET name = @name, phone = @phone, address = @address, id_type = @id_type, id_number = @id_number, customer_type = @customer_type, ghana_card = @ghana_card, id_held = @id_held, id_held_at = @id_held_at WHERE id = @id AND branch = @branch`
+  ).run({
+    name, phone,
+    address: address || null,
+    id_type: id_type || null,
+    id_number: id_number || null,
+    customer_type: type,
+    ghana_card: card,
+    id_held: holdId ? 1 : 0,
+    id_held_at: holdId ? nowIso() : null,
+    id,
+    branch: req.branch
+  });
+  res.redirect("/customers?updated=1");
 });
 
 app.get("/sales", requireAuth, (req, res) => {
@@ -1537,7 +1578,7 @@ app.get("/sales/new", requireAuth, (req, res) => {
        ORDER BY d.id DESC`
     )
     .all({ branch: req.branch });
-  const customers = db.prepare(`SELECT * FROM customers WHERE branch = @branch ORDER BY id DESC`).all({ branch: req.branch });
+  const customers = db.prepare(`SELECT * FROM customers WHERE branch = @branch ORDER BY customer_type DESC, name ASC`).all({ branch: req.branch });
   res.render("sales/new", { devices, customers, error: null });
 });
 
@@ -1551,6 +1592,9 @@ app.post("/sales/new", requireAuth, (req, res) => {
     customer_address,
     customer_id_type,
     customer_id_number,
+    customer_type,
+    ghana_card,
+    id_held,
     sale_type,
     sale_price,
     discount,
@@ -1590,42 +1634,48 @@ app.post("/sales/new", requireAuth, (req, res) => {
        ORDER BY d.id DESC`
     )
     .all({ branch: req.branch });
-  const customers = db.prepare(`SELECT * FROM customers WHERE branch = @branch ORDER BY id DESC`).all({ branch: req.branch });
+  const customers = db.prepare(`SELECT * FROM customers WHERE branch = @branch ORDER BY customer_type DESC, name ASC`).all({ branch: req.branch });
 
   if (!deviceId || !sale_type || salePrice == null) {
-    return res.status(400).render("sales/new", { devices, customers, error: "Fill all required fields." });
+    return res.status(400).render("sales/new", { devices, customers, error: "Select a device, sale type, and enter a price." });
   }
 
   if (shouldCreateCustomer) {
     if (!newCustomerName || !newCustomerPhone) {
-      return res.status(400).render("sales/new", { devices, customers, error: "Customer name and phone are required." });
+      return res.status(400).render("sales/new", { devices, customers, error: "Enter customer name and phone." });
+    }
+    if (isInstallment && !String(ghana_card || "").trim()) {
+      return res.status(400).render("sales/new", { devices, customers, error: "Ghana Card is required for installment." });
     }
   } else {
     if (!selectedCustomerId) {
-      return res.status(400).render("sales/new", { devices, customers, error: "Select a customer or create a new customer." });
+      return res.status(400).render("sales/new", { devices, customers, error: "Pick a customer or click '+ New'." });
     }
     const selectedCustomer = db
-      .prepare(`SELECT id FROM customers WHERE id = @id AND branch = @branch`)
+      .prepare(`SELECT * FROM customers WHERE id = @id AND branch = @branch`)
       .get({ id: selectedCustomerId, branch: req.branch });
     if (!selectedCustomer) {
-      return res.status(400).render("sales/new", { devices, customers, error: "Selected customer is not in this shop." });
+      return res.status(400).render("sales/new", { devices, customers, error: "Customer not in this shop." });
+    }
+    if (isInstallment && !(selectedCustomer.ghana_card || "").trim() && !String(req.body.ghana_card_existing || "").trim()) {
+      return res.status(400).render("sales/new", { devices, customers, error: "This customer has no Ghana Card. Enter it below." });
     }
   }
 
   if (!["Full", "Installment", "SwapFull", "SwapInstallment"].includes(sale_type)) {
-    return res.status(400).render("sales/new", { devices, customers, error: "Invalid sale type." });
+    return res.status(400).render("sales/new", { devices, customers, error: "Choose a sale type." });
   }
 
   const tradeImeis = [trade_imei1, trade_imei2].map((v) => (v || "").trim()).filter(Boolean);
   if (isSwap) {
     if (!trade_model || !trade_condition || tradeValueInt <= 0 || tradeImeis.length === 0) {
-      return res.status(400).render("sales/new", { devices, customers, error: "Swap requires trade-in details: model, condition, trade-in value, and at least 1 IMEI." });
+      return res.status(400).render("sales/new", { devices, customers, error: "Swap needs model, condition, value, and at least 1 IMEI." });
     }
   }
 
   const device = db.prepare(`SELECT * FROM devices WHERE id = @id AND branch = @branch`).get({ id: deviceId, branch: req.branch });
   if (!device || device.status !== "InStock") {
-    return res.status(400).render("sales/new", { devices, customers, error: "Device not available in stock." });
+    return res.status(400).render("sales/new", { devices, customers, error: "Device no longer in stock. Pick another." });
   }
 
   const invoiceNo = `INV-${Date.now()}`;
@@ -1633,10 +1683,13 @@ app.post("/sales/new", requireAuth, (req, res) => {
   const tx = db.transaction(() => {
     let customerId = selectedCustomerId;
     if (shouldCreateCustomer) {
+      const dealerType = customer_type === "Dealer" ? "Dealer" : "Customer";
+      const card = String(ghana_card || "").trim() || null;
+      const holdId = id_held === "1" || id_held === "on";
       const insCustomer = db
         .prepare(
-          `INSERT INTO customers (branch, name, phone, address, id_type, id_number, created_at)
-           VALUES (@branch, @name, @phone, @address, @id_type, @id_number, @created_at)`
+          `INSERT INTO customers (branch, name, phone, address, id_type, id_number, customer_type, ghana_card, id_held, id_held_at, created_at)
+           VALUES (@branch, @name, @phone, @address, @id_type, @id_number, @customer_type, @ghana_card, @id_held, @id_held_at, @created_at)`
         )
         .run({
           branch: req.branch,
@@ -1645,9 +1698,23 @@ app.post("/sales/new", requireAuth, (req, res) => {
           address: newCustomerAddress,
           id_type: newCustomerIdType,
           id_number: newCustomerIdNumber,
+          customer_type: dealerType,
+          ghana_card: card,
+          id_held: holdId ? 1 : 0,
+          id_held_at: holdId ? nowIso() : null,
           created_at: nowIso()
         });
       customerId = insCustomer.lastInsertRowid;
+    }
+
+    // Update existing customer's Ghana Card if provided via inline field
+    const ghanaCardExisting = String(req.body.ghana_card_existing || "").trim();
+    if (!shouldCreateCustomer && ghanaCardExisting) {
+      db.prepare(`UPDATE customers SET ghana_card = @card WHERE id = @id AND branch = @branch`).run({
+        card: ghanaCardExisting,
+        id: customerId,
+        branch: req.branch
+      });
     }
 
     const saleIns = db
@@ -1874,6 +1941,7 @@ app.get("/returns", requireAuth, (req, res) => {
   const rows = db
     .prepare(
       `SELECT r.*, s.invoice_no, c.name AS customer_name, c.phone AS customer_phone,
+              c.customer_type, c.ghana_card, c.id_held,
               d.model AS device_model,
               COALESCE(u.name, 'Unknown') AS created_by_name
        FROM returns r
@@ -1893,6 +1961,7 @@ app.get("/sales/:id/return", requireAuth, (req, res) => {
   const sale = db
     .prepare(
       `SELECT s.*, c.name AS customer_name, c.phone AS customer_phone,
+              c.customer_type, c.ghana_card, c.id_held,
               d.model AS device_model,
               (SELECT group_concat(di.imei, ', ') FROM device_imeis di WHERE di.device_id = d.id) AS device_imeis
        FROM sales s
@@ -1917,7 +1986,9 @@ app.post("/sales/:id/return", requireAuth, (req, res) => {
 
   const sale = db
     .prepare(
-      `SELECT s.* FROM sales s
+      `SELECT s.*, c.customer_type, c.ghana_card, c.id_held, c.id AS customer_id
+       FROM sales s
+       JOIN customers c ON c.id = s.customer_id
        WHERE s.id = @id AND s.branch = @branch`
     )
     .get({ id: saleId, branch: req.branch });
@@ -1929,13 +2000,14 @@ app.post("/sales/:id/return", requireAuth, (req, res) => {
     const saleForRender = db
       .prepare(
         `SELECT s.*, c.name AS customer_name, c.phone AS customer_phone,
+                c.customer_type, c.ghana_card, c.id_held,
                 d.model AS device_model,
                 (SELECT group_concat(di.imei, ', ') FROM device_imeis di WHERE di.device_id = d.id) AS device_imeis
          FROM sales s JOIN customers c ON c.id = s.customer_id JOIN devices d ON d.id = s.device_id
          WHERE s.id = @id`
       )
       .get({ id: saleId });
-    return res.status(400).render("returns/new", { sale: saleForRender, existingReturn, error: "Select a return reason." });
+    return res.status(400).render("returns/new", { sale: saleForRender, existingReturn, error: "Choose a return reason." });
   }
 
   const tx = db.transaction(() => {
@@ -1971,6 +2043,11 @@ app.post("/sales/:id/return", requireAuth, (req, res) => {
 
     db.prepare(`UPDATE sales SET is_returned = 1 WHERE id = @id`).run({ id: saleId });
     db.prepare(`UPDATE devices SET status = 'Returned' WHERE id = @device_id`).run({ device_id: sale.device_id });
+
+    //  Release dealer's held ID/Ghana Card if applicable
+    if (sale.customer_type === "Dealer" && sale.id_held) {
+      db.prepare(`UPDATE customers SET id_held = 0, id_held_at = NULL WHERE id = @id`).run({ id: sale.customer_id });
+    }
 
     //  Reverse installment if any
     const plan = db.prepare(`SELECT * FROM installment_plans WHERE sale_id = @sale_id`).get({ sale_id: saleId });
@@ -2104,7 +2181,7 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
       recipients,
       filter,
       senderId: getSenderId(),
-      error: "Message is required.",
+      error: "Type a message.",
       selectedTemplateId: templateId,
       message: ""
     });
@@ -2115,7 +2192,7 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
       recipients,
       filter,
       senderId: getSenderId(),
-      error: "Select at least one debtor or paste at least one contact.",
+      error: "Pick at least 1 recipient or paste contacts.",
       selectedTemplateId: templateId,
       message: body
     });

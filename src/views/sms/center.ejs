@@ -34,6 +34,17 @@
       Message *
       <textarea name="message" id="msgText" rows="4" required placeholder="Type the SMS message"><%= message || "" %></textarea>
     </label>
+
+    <% if (templates.length > 0) { %>
+      <div class="span-2" style="margin-top: -4px;">
+        <span class="muted" style="font-size: 12px; display: block; margin-bottom: 6px;">Click a template to fill the message:</span>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+          <% for (const t of templates) { %>
+            <button type="button" class="btn secondary small" style="font-size: 12px; padding: 4px 10px;" onclick="fillTemplate('<%= t.body.replace(/'/g, "\\'").replace(/\n/g, "\\n") %>')" title="<%= t.body.replace(/"/g, '&quot;') %>"><%= t.name %></button>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
   </div>
 
   <!--  PASTE CONTACTS  -->
@@ -138,6 +149,12 @@ function applyTemplate() {
     var body = sel.options[idx].getAttribute("data-body");
     document.getElementById("msgText").value = body || "";
   }
+}
+
+function fillTemplate(body) {
+  document.getElementById("msgText").value = body;
+  // also reset the dropdown to "None" since filling was done by button click
+  document.getElementById("templateSelect").selectedIndex = 0;
 }
 
 //  Paste area logic

@@ -1,0 +1,60 @@
+<%- include("../partials/head", { title: "Edit Customer" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Edit <%= customer.name %></h1>
+  <a class="btn secondary" href="/customers">Back</a>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<form class="form" method="post" action="/customers/<%= customer.id %>/edit">
+  <div class="grid">
+    <label class="span-2">
+      Type *
+      <div style="display: flex; gap: 10px; margin-top: 4px;">
+        <label class="inline" style="margin-bottom: 0;">
+          <input type="radio" name="customer_type" value="Customer" <%= customer.customer_type === "Customer" ? "checked" : "" %> onchange="toggleDealer()" /> Customer
+        </label>
+        <label class="inline" style="margin-bottom: 0;">
+          <input type="radio" name="customer_type" value="Dealer" <%= customer.customer_type === "Dealer" ? "checked" : "" %> onchange="toggleDealer()" /> Dealer (Bulk Buyer)
+        </label>
+      </div>
+    </label>
+    <label>
+      Full Name *
+      <input name="name" required value="<%= customer.name %>" placeholder="Full name" />
+    </label>
+    <label>
+      Phone *
+      <input name="phone" required value="<%= customer.phone %>" placeholder="020XXXXXXXX" />
+    </label>
+    <label>
+      Ghana Card Number
+      <input name="ghana_card" value="<%= customer.ghana_card || "" %>" placeholder="GHA-XXXXXXXXX-X" class="mono" />
+    </label>
+    <label>
+      Address
+      <input name="address" value="<%= customer.address || "" %>" placeholder="Konongo, Ashanti" />
+    </label>
+    <div id="dealerFields">
+      <label>
+        <input type="checkbox" name="id_held" value="1" <%= customer.id_held ? "checked" : "" %> /> Hold Ghana Card
+        <span class="hint">Check if dealer is paying later (installment).</span>
+      </label>
+    </div>
+  </div>
+  <button class="btn" type="submit">Save Changes</button>
+</form>
+
+<script>
+function toggleDealer() {
+  var isDealer = document.querySelector('input[name="customer_type"]:checked')?.value === "Dealer";
+  document.getElementById("dealerFields").style.display = isDealer ? "block" : "none";
+}
+toggleDealer();
+</script>
+
+<%- include("../partials/foot") %>

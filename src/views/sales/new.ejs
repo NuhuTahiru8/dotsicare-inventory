@@ -1,4 +1,4 @@
-﻿<%- include("../partials/head", { title: "New Sale" }) %>
+<%- include("../partials/head", { title: "New Sale" }) %>
 <%- include("../partials/nav") %>
 
 <div class="row">
@@ -10,26 +10,84 @@
   <div class="alert"><%= error %></div>
 <% } %>
 
-<form class="form" method="post" action="/sales/new">
+<form class="form" method="post" action="/sales/new" autocomplete="off">
+  <!-- Customer Type Tabs -->
+  <div class="row" style="margin-bottom: 0;">
+    <h2 style="margin: 0;">Who is buying?</h2>
+    <div class="row-actions">
+      <button type="button" class="btn" id="tabCustomerBtn" onclick="switchSaleTab('Customer')">Customers</button>
+      <button type="button" class="btn secondary" id="tabDealerBtn" onclick="switchSaleTab('Dealer')">Dealers</button>
+    </div>
+  </div>
+
   <div class="grid">
     <label>
       Customer *
-      <select name="customer_id" required>
-        <option value="">Select customer</option>
-        <% for (const c of customers) { %>
-          <option value="<%= c.id %>"><%= c.name %> (<%= c.phone %>)</option>
-        <% } %>
-      </select>
+      <input type="hidden" name="customer_id" id="customerIdField" value="" />
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <select id="customerSelect" style="flex: 1;" onchange="onCustomerChange()">
+          <option value="">Select existing customer</option>
+          <% for (const c of customers) { %>
+            <option value="<%= c.id %>" data-type="<%= c.customer_type %>" data-ghana-card="<%= c.ghana_card || "" %>"><%= c.name %> (<%= c.phone %>)<%= c.customer_type === "Dealer" ? " [Dealer]" : "" %></option>
+          <% } %>
+        </select>
+        <span class="muted" style="white-space: nowrap; font-size: 13px;">or</span>
+        <button class="btn secondary small" type="button" id="newCustomerToggle" onclick="toggleNewCustomer()" style="white-space: nowrap;">+ New</button>
+      </div>
     </label>
 
+    <div id="ghanaCardWarn" style="display: none; margin-top: -4px;">
+      <label>
+        <span style="color: var(--red); font-weight: 700;">Ghana Card Required *</span>
+        <span class="hint">Installment sales require a Ghana Card number.</span>
+        <input name="ghana_card_existing" id="ghanaCardExisting" placeholder="GHA-XXXXXXXXX-X" class="mono" style="border-color: var(--red);" />
+      </label>
+    </div>
+
+    <div id="newCustomerFields" style="display: none;">
+      <div class="grid">
+        <label>
+          <span id="newCustomerLabel">Customer</span> Name *
+          <input name="customer_name" id="customerNameField" placeholder="Full name" />
+        </label>
+        <label>
+          Phone *
+          <input name="customer_phone" id="customerPhoneField" placeholder="020XXXXXXXX" />
+        </label>
+        <label>
+          Address
+          <input name="customer_address" placeholder="Optional" />
+        </label>
+        <label>
+          Ghana Card Number
+          <input name="ghana_card" id="ghanaCardNew" placeholder="GHA-XXXXXXXXX-X" class="mono" />
+        </label>
+        <input type="hidden" name="customer_type" id="customerTypeField" value="Customer" />
+        <div id="dealerInlineFields" style="display: none;">
+          <label>
+            <input type="checkbox" name="id_held" value="1" /> Hold Ghana Card
+            <span class="hint">Check if dealer is paying later (installment). Leave unchecked if paid in full.</span>
+          </label>
+        </div>
+        <input type="hidden" name="create_customer" id="createCustomerFlag" value="" />
+      </div>
+    </div>
+
+    <!-- DEVICE SEARCH -->
     <label>
       Device (In Stock) *
-      <select name="device_id" required>
-        <option value="">Select device</option>
-        <% for (const d of devices) { %>
-          <option value="<%= d.id %>"><%= d.model %> - <%= [d.storage, d.color].filter(Boolean).join(" / ") %> - <%= d.imeis %></option>
-        <% } %>
-      </select>
+      <input type="hidden" name="device_id" id="deviceIdField" value="" />
+      <div class="searchable-wrap">
+        <input
+          type="text"
+          id="deviceSearch"
+          class="searchable-input"
+          placeholder="Search by model, storage, color, or IMEI..."
+          autocomplete="off"
+        />
+        <div class="searchable-results" id="deviceResults"></div>
+      </div>
+      <span class="searchable-hint">Type e.g. "XR", "12 Pro", "128GB", or last 4 IMEI digits</span>
     </label>
 
     <label>
@@ -45,12 +103,14 @@
 
     <label>
       Sale Price (&#8373;) *
-      <input name="sale_price" type="number" min="0" required />
+      <input name="sale_price" id="salePriceInput" type="number" min="0" required oninput="checkPriceHint()" />
+      <div id="priceHint" style="display: none; color: var(--amber); font-size: 12px; margin-top: 3px;"></div>
     </label>
 
     <label>
       Discount (&#8373;)
-      <input name="discount" type="number" min="0" value="0" />
+      <input name="discount" id="discountInput" type="number" min="0" value="0" />
+      <span class="hint">Use this if you sell below the device price. e.g. Price = 5000, Discount = 1000 &rarr; customer pays 4000</span>
     </label>
 
     <label>
@@ -62,6 +122,7 @@
       Payment Method
       <select name="payment_method">
         <option>Cash</option>
+        <option>MOMO</option>
         <option>Transfer</option>
         <option>POS</option>
       </select>
@@ -113,17 +174,299 @@
 <p class="hint">For installment: down payment is recorded immediately and due date is set to 3 months.</p>
 
 <script>
-  (function () {
-    var sel = document.getElementById("saleType");
-    var swap = document.getElementById("swapFields");
-    function sync() {
-      var v = (sel && sel.value) || "";
-      var isSwap = v === "SwapFull" || v === "SwapInstallment";
-      if (swap) swap.style.display = isSwap ? "block" : "none";
+// ─── DEVICE SEARCH ───
+var allDevices = <%- JSON.stringify(devices.map(d => ({ id: d.id, model: d.model, storage: d.storage || "", color: d.color || "", imeis: d.imeis || "", condition: d.condition, sale_price: d.sale_price || 0 }))) %>;
+
+var deviceSearch = document.getElementById("deviceSearch");
+var deviceResults = document.getElementById("deviceResults");
+var deviceIdField = document.getElementById("deviceIdField");
+var highlightIdx = -1;
+var selectedDevicePrice = 0;
+
+deviceSearch.addEventListener("input", function () {
+  var q = deviceSearch.value.trim().toLowerCase();
+  highlightIdx = -1;
+  if (!q) {
+    deviceResults.classList.remove("open");
+    deviceResults.innerHTML = "";
+    return;
+  }
+  var filtered = allDevices.filter(function (d) {
+    return d.model.toLowerCase().indexOf(q) !== -1
+        || (d.storage || "").toLowerCase().indexOf(q) !== -1
+        || (d.color || "").toLowerCase().indexOf(q) !== -1
+        || (d.imeis || "").toLowerCase().indexOf(q) !== -1;
+  });
+
+  if (filtered.length === 0) {
+    deviceResults.innerHTML = '<div class="searchable-empty">No devices match "' + escapeHtml(q) + '"</div>';
+  } else {
+    deviceResults.innerHTML = filtered.map(function (d, i) {
+      var variant = [d.storage, d.color, d.condition].filter(Boolean).join(" / ");
+      return '<div class="searchable-item" data-id="' + d.id + '" data-idx="' + i + '" ' +
+        'onmousedown="selectDevice(' + d.id + ',\'' + escapeJs(d.model) + ' ' + escapeJs(variant) + ' ' + escapeJs(d.imeis) + '\')">' +
+        '<span class="s-model">' + escapeHtml(d.model) + '</span>' +
+        '<span class="s-variant">' + escapeHtml(variant) + '</span>' +
+        '<span class="s-imei">' + escapeHtml(d.imeis || "") + '</span>' +
+        '</div>';
+    }).join("");
+  }
+  deviceResults.classList.add("open");
+});
+
+deviceSearch.addEventListener("keydown", function (e) {
+  var items = deviceResults.querySelectorAll(".searchable-item");
+  if (!items.length) return;
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    highlightIdx = Math.min(highlightIdx + 1, items.length - 1);
+    updateHighlight(items);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    highlightIdx = Math.max(highlightIdx - 1, 0);
+    updateHighlight(items);
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    if (highlightIdx >= 0 && items[highlightIdx]) {
+      items[highlightIdx].click();
     }
-    if (sel) sel.addEventListener("change", sync);
-    sync();
-  })();
+  } else if (e.key === "Escape") {
+    deviceResults.classList.remove("open");
+    highlightIdx = -1;
+  }
+});
+
+function updateHighlight(items) {
+  items.forEach(function (item, i) {
+    item.classList.toggle("highlight", i === highlightIdx);
+  });
+  if (highlightIdx >= 0 && items[highlightIdx]) {
+    items[highlightIdx].scrollIntoView({ block: "nearest" });
+  }
+}
+
+function selectDevice(id, label) {
+  deviceSearch.value = label;
+  deviceIdField.value = id;
+  deviceResults.classList.remove("open");
+  highlightIdx = -1;
+
+  // auto-fill sale price
+  var dev = allDevices.find(function (d) { return d.id === id; });
+  selectedDevicePrice = dev ? (dev.sale_price || 0) : 0;
+  var priceInput = document.querySelector('input[name="sale_price"]');
+  if (dev && dev.sale_price) {
+    if (priceInput && !priceInput.value) {
+      priceInput.value = parseFloat(dev.sale_price).toFixed(0);
+      priceInput.style.background = "rgba(22,163,74,0.06)";
+      setTimeout(function () { priceInput.style.background = ""; }, 1500);
+    }
+  }
+  checkPriceHint();
+}
+
+// ─── PRICE vs DISCOUNT HINT ───
+function checkPriceHint() {
+  var hint = document.getElementById("priceHint");
+  var priceVal = parseFloat(document.getElementById("salePriceInput").value) || 0;
+  if (!selectedDevicePrice || !priceVal || priceVal >= selectedDevicePrice) {
+    hint.style.display = "none";
+    return;
+  }
+  var diff = selectedDevicePrice - priceVal;
+  hint.style.display = "block";
+  hint.textContent = "Price (\u20B5" + priceVal.toLocaleString() + ") is below device price (\u20B5" + selectedDevicePrice.toLocaleString() + "). Put \u20B5" + diff.toLocaleString() + " as Discount instead.";
+}
+
+function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function escapeJs(s) { return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
+
+document.addEventListener("click", function (e) {
+  if (!deviceSearch.contains(e.target) && !deviceResults.contains(e.target)) {
+    deviceResults.classList.remove("open");
+    highlightIdx = -1;
+  }
+});
+
+// ─── SALE TYPE TOGGLE ───
+(function () {
+  var sel = document.getElementById("saleType");
+  var swap = document.getElementById("swapFields");
+  function sync() {
+    var v = (sel && sel.value) || "";
+    var isSwap = v === "SwapFull" || v === "SwapInstallment";
+    if (swap) swap.style.display = isSwap ? "block" : "none";
+    checkGhanaCardRequirement();
+  }
+  if (sel) sel.addEventListener("change", sync);
+  sync();
+})();
+
+// ─── GHANA CARD REQUIREMENT FOR INSTALLMENT ───
+function isInstallmentSaleType() {
+  var v = (document.getElementById("saleType") || {}).value || "";
+  return v === "Installment" || v === "SwapInstallment";
+}
+
+function checkGhanaCardRequirement() {
+  var warnDiv = document.getElementById("ghanaCardWarn");
+  if (!isInstallmentSaleType()) {
+    if (warnDiv) warnDiv.style.display = "none";
+    return;
+  }
+
+  var newFieldsOpen = document.getElementById("newCustomerFields").style.display !== "none";
+
+  if (newFieldsOpen) {
+    // "+ New" is open — Ghana Card input is already visible inside it
+    if (warnDiv) warnDiv.style.display = "none";
+  } else {
+    // Existing customer selected — check if they have a Ghana Card
+    var select = document.getElementById("customerSelect");
+    var opt = select && select.options[select.selectedIndex];
+    var card = opt ? (opt.getAttribute("data-ghana-card") || "").trim() : "";
+    if (!card && select.value) {
+      if (warnDiv) warnDiv.style.display = "block";
+    } else {
+      if (warnDiv) warnDiv.style.display = "none";
+    }
+  }
+}
+
+// ─── FORM SUBMIT VALIDATION ───
+document.querySelector("form").addEventListener("submit", function (e) {
+  // 1. Ghana Card required for installment
+  if (isInstallmentSaleType()) {
+    var newFieldsOpen = document.getElementById("newCustomerFields").style.display !== "none";
+    var ghanaCard = "";
+
+    if (newFieldsOpen) {
+      ghanaCard = (document.getElementById("ghanaCardNew") || {}).value || "";
+    } else {
+      var select = document.getElementById("customerSelect");
+      var opt = select && select.options[select.selectedIndex];
+      var existingCard = opt ? (opt.getAttribute("data-ghana-card") || "").trim() : "";
+      if (existingCard) { /* ok */ }
+      else { ghanaCard = (document.getElementById("ghanaCardExisting") || {}).value || ""; }
+    }
+
+    if (!String(ghanaCard).trim()) {
+      e.preventDefault();
+      alert("Ghana Card is required for installment.\n\nEnter the customer's Ghana Card number.");
+      var field = document.getElementById("ghanaCardNew") || document.getElementById("ghanaCardExisting");
+      if (field) field.focus();
+      return;
+    }
+  }
+
+  // 2. No device selected
+  if (!document.getElementById("deviceIdField").value) {
+    e.preventDefault();
+    alert("Select a device from stock first. Search by model, storage, or IMEI.");
+    document.getElementById("deviceSearch").focus();
+    return;
+  }
+
+  // 3. Price below device price with no discount
+  var priceVal = parseFloat(document.getElementById("salePriceInput").value) || 0;
+  var discountVal = parseFloat(document.getElementById("discountInput").value) || 0;
+  if (selectedDevicePrice && priceVal < selectedDevicePrice && discountVal === 0) {
+    var diff = selectedDevicePrice - priceVal;
+    if (!confirm("Price is below device price.\n\nDid you mean \u20B5" + diff.toLocaleString() + " as Discount?\n\nOK = continue, Cancel = fix it.")) {
+      e.preventDefault();
+      document.getElementById("discountInput").focus();
+      return;
+    }
+  }
+
+  // 4. Installment with no down payment
+  if (isInstallmentSaleType()) {
+    var down = parseFloat(document.querySelector('input[name="down_payment"]').value) || 0;
+    if (down === 0 && !confirm("Down payment is \u20B50.\n\nCustomer pays nothing now. Continue?")) {
+      e.preventDefault();
+      return;
+    }
+  }
+});
+
+// ─── CUSTOMER / DEALER TABS ───
+function switchSaleTab(type) {
+  document.getElementById("tabCustomerBtn").className = "btn" + (type === "Customer" ? "" : " secondary");
+  document.getElementById("tabDealerBtn").className = "btn" + (type === "Dealer" ? "" : " secondary");
+
+  // Filter customer dropdown
+  var select = document.getElementById("customerSelect");
+  var opts = select.options;
+  for (var i = 0; i < opts.length; i++) {
+    var dt = opts[i].getAttribute("data-type");
+    if (i === 0) { opts[i].style.display = ""; continue; } // placeholder
+    if (type === "Customer") {
+      opts[i].style.display = (!dt || dt === "Customer") ? "" : "none";
+    } else {
+      opts[i].style.display = dt === "Dealer" ? "" : "none";
+    }
+  }
+
+  // Pre-set new customer type field
+  document.getElementById("customerTypeField").value = type;
+  document.getElementById("newCustomerLabel").textContent = type;
+
+  // If "+ New" is open, update dealer fields visibility
+  if (document.getElementById("newCustomerFields").style.display !== "none") {
+    document.getElementById("dealerInlineFields").style.display = type === "Dealer" ? "block" : "none";
+  }
+
+  // Clear selection
+  select.value = "";
+  document.getElementById("customerIdField").value = "";
+
+  localStorage.setItem("new_sale_tab", type);
+}
+
+// ─── NEW CUSTOMER TOGGLE ───
+function toggleNewCustomer() {
+  var fields = document.getElementById("newCustomerFields");
+  var select = document.getElementById("customerSelect");
+  var flag = document.getElementById("createCustomerFlag");
+  var hiddenId = document.getElementById("customerIdField");
+  var toggle = document.getElementById("newCustomerToggle");
+  var nameField = document.getElementById("customerNameField");
+  var phoneField = document.getElementById("customerPhoneField");
+
+  if (fields.style.display === "none") {
+    fields.style.display = "block";
+    select.value = "";
+    select.disabled = true;
+    hiddenId.value = "";
+    flag.value = "on";
+    toggle.textContent = "Cancel";
+    nameField.focus();
+
+    // Sync dealer fields based on active tab
+    var activeType = document.getElementById("customerTypeField").value;
+    document.getElementById("dealerInlineFields").style.display = activeType === "Dealer" ? "block" : "none";
+  } else {
+    fields.style.display = "none";
+    select.disabled = false;
+    flag.value = "";
+    toggle.textContent = "+ New";
+    nameField.value = "";
+    phoneField.value = "";
+  }
+  checkGhanaCardRequirement();
+}
+
+function onCustomerChange() {
+  var select = document.getElementById("customerSelect");
+  var hiddenId = document.getElementById("customerIdField");
+  hiddenId.value = select.value;
+  checkGhanaCardRequirement();
+}
+
+// ─── INIT ───
+onCustomerChange();
+var lastTab = localStorage.getItem("new_sale_tab") || "Customer";
+switchSaleTab(lastTab);
 </script>
 
 <%- include("../partials/foot") %>

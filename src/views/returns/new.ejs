@@ -13,9 +13,23 @@
 <div class="panel">
   <dl class="dl">
     <div><dt>Invoice</dt><dd class="mono"><%= sale.invoice_no %></dd></div>
-    <div><dt>Customer</dt><dd><%= sale.customer_name %> (<%= sale.customer_phone %>)</dd></div>
+    <div><dt>Customer</dt><dd><%= sale.customer_name %> (<%= sale.customer_phone %>)
+      <% if (sale.customer_type === "Dealer") { %>
+        <span class="pill warn">Dealer</span>
+      <% } %>
+    </dd></div>
     <div><dt>Device</dt><dd><%= sale.device_model %></dd></div>
     <div><dt>IMEI(s)</dt><dd class="mono"><%= sale.device_imeis || "-" %></dd></div>
+    <% if (sale.customer_type === "Dealer") { %>
+      <div><dt>Ghana Card</dt><dd class="mono"><%= sale.ghana_card || "Not provided" %></dd></div>
+      <div><dt>ID Held</dt><dd>
+        <% if (sale.id_held) { %>
+          <span class="pill warn">Yes &mdash; Ghana Card held for installment</span>
+        <% } else { %>
+          <span class="pill ok">No &mdash; Paid in full</span>
+        <% } %>
+      </dd></div>
+    <% } %>
   </dl>
 </div>
 

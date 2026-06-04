@@ -61,6 +61,10 @@ function migrate() {
   addColumnIfMissing("message_templates", "created_by_user_id INTEGER");
   addColumnIfMissing("sms_messages", "branch TEXT NOT NULL DEFAULT 'Konongo'");
   addColumnIfMissing("sms_messages", "created_by_user_id INTEGER");
+  addColumnIfMissing("customers", "customer_type TEXT NOT NULL DEFAULT 'Customer'");
+  addColumnIfMissing("customers", "ghana_card TEXT");
+  addColumnIfMissing("customers", "id_held INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing("customers", "id_held_at TEXT");
   addColumnIfMissing("sales", "is_returned INTEGER NOT NULL DEFAULT 0");
 
   //  returns table (create if not exists — schema.sql handles it, migration fallback)
