@@ -2107,6 +2107,91 @@ function substrDate(iso) {
   return (iso || "").slice(0, 10);
 }
 
+
+// Paystack payment
+app.post("/api/paystack/initialize", requireAdmin, (req, res) => {
+  const { amount, plan } = req.body;
+  const ghs = Number(amount) || 0;
+  if (ghs < 1) return res.status(400).json({ status: "error", message: "Invalid amount" });
+
+  const reference = "DOT_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8);
+  const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || "";
+
+  const https = require("https");
+  const data = JSON.stringify({
+    email: "dotsicare@ayisun.com",
+    amount: ghs * 100, // Paystack uses pesewas/ko
+    reference,
+    currency: "GHS",
+    metadata: { plan: plan || "custom", user_id: req.user.id, username: req.user.name }
+  });
+
+  const options = {
+    hostname: "api.paystack.co",
+    port: 443,
+    path: "/transaction/initialize",
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + PAYSTACK_SECRET,
+      "Content-Type": "application/json"
+    }
+  };
+
+  const payReq = https.request(options, (payRes) => {
+    let body = "";
+    payRes.on("data", (chunk) => { body += chunk; });
+    payRes.on("end", () => {
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed.status && parsed.data && parsed.data.authorization_url) {
+          res.json({ status: "success", authorization_url: parsed.data.authorization_url, reference });
+        } else {
+          res.status(500).json({ status: "error", message: "Payment init failed" });
+        }
+      } catch (e) {
+        res.status(500).json({ status: "error", message: "Parse error" });
+      }
+    });
+  });
+  payReq.on("error", () => res.status(500).json({ status: "error", message: "Network error" }));
+  payReq.write(data);
+  payReq.end();
+});
+
+app.get("/api/paystack/verify", requireAdmin, (req, res) => {
+  const reference = req.query.reference || "";
+  if (!reference) return res.status(400).json({ status: "error", message: "Missing reference" });
+
+  const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || "";
+  const https = require("https");
+
+  https.get("https://api.paystack.co/transaction/verify/" + reference, {
+    headers: { Authorization: "Bearer " + PAYSTACK_SECRET }
+  }, (payRes) => {
+    let body = "";
+    payRes.on("data", (chunk) => { body += chunk; });
+    payRes.on("end", () => {
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed.status && parsed.data.status === "success") {
+          const amount = Math.round(parsed.data.amount / 100);
+          const credits = Math.round(parsed.data.metadata?.credits || amount * 10);
+          
+          // Add credits
+          db.prepare("UPDATE users SET sms_credits = sms_credits + @credits WHERE id = @id")
+            .run({ credits, id: req.user.id });
+
+          res.json({ status: "success", credits_added: credits, amount });
+        } else {
+          res.json({ status: "failed", message: "Payment not successful" });
+        }
+      } catch (e) {
+        res.status(500).json({ status: "error" });
+      }
+    });
+  }).on("error", () => res.status(500).json({ status: "error" }));
+});
+
 app.get("/credits", requireAdmin, (req, res) => {
   const smsCredits = db.prepare("SELECT sms_credits FROM users WHERE id = @id").get({ id: req.user.id })?.sms_credits || 0;
   res.render("credits", { smsCredits });
