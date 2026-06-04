@@ -1390,7 +1390,7 @@ app.get("/reports/profit", requireAdmin, (req, res) => {
 app.get("/inventory/summary", requireAuth, (req, res) => {
   const items = db
     .prepare(
-      
+      "SELECT d.model, d.storage, d.color, d.status, d.product_type, d.os, d.sale_price, group_concat(di.imei, ', ') AS imeis FROM devices d LEFT JOIN device_imeis di ON di.device_id = d.id WHERE d.branch = @branch GROUP BY d.id ORDER BY d.model, d.storage"
     )
     .all({ branch: req.branch });
 
