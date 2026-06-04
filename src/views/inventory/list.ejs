@@ -47,7 +47,13 @@
   <button class="cat-filter" onclick="filterModel('iOS')" id="mf-iOS" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;">iOS (<%= cat.iOS.in %>)</button>
   <button class="cat-filter" onclick="filterModel('Android')" id="mf-Android" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;">Android (<%= cat.Android.in %>)</button>
   <button class="cat-filter" onclick="filterModel('Accessory')" id="mf-Accessory" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;">Accessories (<%= cat.Accessory.in %>)</button>
-</div>
+
+  <select id="filterStorage" onchange="applyFilters()" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:20px;font-size:13px;margin-left:8px;">
+    <option value="all">All Storage</option>
+  </select>
+  <select id="filterColor" onchange="applyFilters()" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:20px;font-size:13px;margin-left:8px;">
+    <option value="all">All Colors</option>
+  </select></div>
 
 <!-- Per Model -->
 <div id="modelList"></div>
@@ -63,21 +69,27 @@ function filterCat(cat) {
   renderModels();
 }
 
-function filterModel(os) {
+function applyFilters() {
+  var os = document.querySelector('.cat-filter.active')?.id?.replace('mf-','') || 'all';
+  var st = document.getElementById('filterStorage').value;
+  var cl = document.getElementById('filterColor').value;
+  renderFiltered(os, st, cl);
+}
+function filterModel(os) { {
   document.querySelectorAll('.cat-filter').forEach(function(el) { el.classList.remove('active'); });
   document.getElementById('mf-'+os).classList.add('active');
   renderModels(os);
 }
 
-function renderModels(osFilter) {
-  var filter = osFilter || 'all';
+function renderFiltered(osFilter, stFilter, clFilter) {
+  var osF = osFilter || 'all'; var stF = stFilter || 'all'; var clF = clFilter || 'all';
   var html = '';
   var keys = Object.keys(allModels).sort();
   var shown = 0;
   
   keys.forEach(function(k) {
     var m = allModels[k];
-    var show = filter === 'all' || 
+    var show = (osF === 'all' || 
       (filter === 'iOS' && m.os === 'iOS') ||
       (filter === 'Android' && m.os === 'Android') ||
       (filter === 'Accessory' && m.type === 'Accessory');
@@ -109,4 +121,17 @@ function renderModels(osFilter) {
 }
 
 renderModels('all');
+</script>
+
+<script>
+// Populate dropdowns from data
+(function() {
+  var stSet = new Set(), clSet = new Set();
+  Object.values(allModels).forEach(function(m) { if(m.storage) stSet.add(m.storage); if(m.color) clSet.add(m.color); });
+  var st = document.getElementById('filterStorage'), cl = document.getElementById('filterColor');
+  Array.from(stSet).sort().forEach(function(v) { st.innerHTML += '<option>'+v+'</option>'; });
+  Array.from(clSet).sort().forEach(function(v) { cl.innerHTML += '<option>'+v+'</option>'; });
+})();
+function filterModel(os) { document.querySelectorAll('.cat-filter').forEach(function(e){e.classList.remove('active')}); document.getElementById('mf-'+os).classList.add('active'); applyFilters(); }
+function applyFilters() { var os=document.querySelector('.cat-filter.active')?.id?.replace('mf-','')||'all'; var st=document.getElementById('filterStorage').value; var cl=document.getElementById('filterColor').value; renderFiltered(os,st,cl); }
 </script>
