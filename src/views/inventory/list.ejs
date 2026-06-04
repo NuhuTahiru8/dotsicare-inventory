@@ -1,130 +1,99 @@
 <%- include("../partials/head", { title: "Inventory" }) %>
 <%- include("../partials/nav") %>
 
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
   <h1 style="margin:0;">Inventory</h1>
   <a class="btn btn-primary" href="/inventory/new">+ Add Stock</a>
-      <a class="btn" href="/inventory/summary" style="background:#0f2d62;color:#fff;border-radius:8px;padding:8px 16px;text-decoration:none;font-size:14px;font-weight:600;">Stock Summary</a>
 </div>
 
-<!-- Stock Summary -->
-  <%
-    var stockByModel = {};
-    var totalInStock = 0;
-    var totalSold = 0;
-    items.forEach(function(d) {
-      var key = d.model + " " + (d.storage||"");
-      if (d.status === "Sold") {
-        totalSold++;
-      } else {
-        if (!stockByModel[key]) stockByModel[key] = 0;
-        stockByModel[key]++;
-        totalInStock++;
-      }
-    });
-    var modelKeys = Object.keys(stockByModel).sort();
-  %>
-  <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">
-    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px 20px;text-align:center;">
-      <div style="font-size:28px;font-weight:800;color:#0369a1;"><%= totalInStock %></div>
-      <div style="font-size:12px;color:#0369a1;">In Stock</div>
-    </div>
-    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 20px;text-align:center;">
-      <div style="font-size:28px;font-weight:800;color:#dc2626;"><%= totalSold %></div>
-      <div style="font-size:12px;color:#dc2626;">Sold</div>
-    </div>
-    <button id="toggleModelBtn" onclick="toggleModelBreakdown()" style="background:linear-gradient(135deg,#0f2d62,#1e40af);color:#fff;border:none;border-radius:12px;padding:14px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 14px rgba(15,45,98,0.3);letter-spacing:0.3px;" onmouseover="this.style.transform='scale(1.03)';this.style.boxShadow='0 6px 20px rgba(15,45,98,0.4)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 14px rgba(15,45,98,0.3)'">
-      Total Per Model (<%= modelKeys.length %>)
-    </button>
-  </div>
+<%
+  var totalStock = 0, totalSold = 0;
+  var catCount = { iOS:0, Android:0, Accessory:0 };
+  var modelCount = {};
+  var soldByModel = {};
+  var allModels = {};
+  
+  items.forEach(function(d) {
+    totalStock += d.in_stock || 0;
+    totalSold += d.sold || 0;
+    
+    var cat = d.product_type === "Accessory" ? "Accessory" : (d.os || "Other");
+    catCount[cat] = (catCount[cat] || 0) + (d.in_stock || 0);
+    
+    var key = d.model + " " + (d.storage||"");
+    modelCount[key] = (modelCount[key] || 0) + (d.in_stock || 0);
+    if (d.sold > 0) soldByModel[key] = (soldByModel[key] || 0) + d.sold;
+    allModels[key] = 1;
+  });
+  
+  var sortedModels = Object.keys(modelCount).sort();
+%>
 
-  <div id="modelBreakdown" style="display:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:20px;padding:16px;background:#f8fafc;border-radius:12px;border:1px solid #e5e7eb;">
-    <% modelKeys.forEach(function(k) { %>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#fff;border-radius:8px;border:1px solid #e5e7eb;">
-        <span style="font-size:13px;font-weight:600;"><%= k %></span>
-        <span style="font-size:16px;font-weight:800;color:var(--primary);"><%= stockByModel[k] %></span>
+<!-- Stock Overview Cards -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
+  <div style="background:#f0fdf4;border:2px solid #22c55e;border-radius:12px;padding:20px;text-align:center;">
+    <div style="font-size:36px;font-weight:800;color:#15803d;"><%= totalStock %></div>
+    <div style="font-size:13px;color:#16a34a;font-weight:600;">In Stock</div>
+  </div>
+  <div style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:20px;text-align:center;">
+    <div style="font-size:36px;font-weight:800;color:#b91c1c;"><%= totalSold %></div>
+    <div style="font-size:13px;color:#dc2626;font-weight:600;">Sold</div>
+  </div>
+  <div style="background:#eff6ff;border:2px solid #3b82f6;border-radius:12px;padding:20px;text-align:center;">
+    <div style="font-size:14px;color:#1d4ed8;margin-bottom:6px;font-weight:600;">By Type</div>
+    <div style="font-size:13px;color:#1e40af;line-height:1.8;">
+      iOS: <strong><%= catCount.iOS||0 %></strong><br>
+      Android: <strong><%= catCount.Android||0 %></strong><br>
+      Acc: <strong><%= catCount.Accessory||0 %></strong>
+    </div>
+  </div>
+  <div style="background:#f8fafc;border:2px solid #64748b;border-radius:12px;padding:20px;text-align:center;">
+    <div style="font-size:14px;color:#475569;margin-bottom:6px;font-weight:600;">Models</div>
+    <div style="font-size:28px;font-weight:800;color:#0f2d62;"><%= sortedModels.length %></div>
+  </div>
+</div>
+
+<!-- Per Model Breakdown -->
+<div style="margin-bottom:16px;">
+  <h3 style="color:#0f2d62;font-size:16px;margin-bottom:8px;">Per Model</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
+    <% sortedModels.forEach(function(k) { %>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;border:1px solid #e5e7eb;">
+        <span style="font-weight:600;"><%= k %></span>
+        <span style="font-weight:800;color:#0f2d62;"><%= modelCount[k] %> <% if (soldByModel[k] > 0) { %><span style="font-size:10px;color:#ef4444;font-weight:400;"> -<%= soldByModel[k] %></span><% } %></span>
       </div>
     <% }); %>
-    <% if (modelKeys.length === 0) { %>
-      <div style="text-align:center;color:#999;grid-column:1/-1;">No stock data</div>
-    <% } %>
   </div>
+</div>
 
-  <script>
-    function toggleModelBreakdown() {
-      var el = document.getElementById("modelBreakdown");
-      var btn = document.getElementById("toggleModelBtn");
-      if (el.style.display === "none" || el.style.display === "") {
-        el.style.display = "grid";
-        btn.textContent = "Hide Breakdown";
-      } else {
-        el.style.display = "none";
-        btn.textContent = "Total Per Model (<%= modelKeys.length %>)";
-      }
-    }
-  </script>
-
-<!-- In Stock Table -->
-<h2 style="color:#22c55e;margin-bottom:8px;">In Stock</h2>
-<table class="data-table">
-  <thead><tr>
-    <th>Type</th><th>OS</th><th>Model</th><th>Storage</th><th>Color</th><th>Condition</th><th>Price</th><th>IMEI</th><th></th>
-  </tr></thead>
+<!-- Clean Table -->
+<table style="width:100%;border-collapse:collapse;font-size:14px;">
+  <thead>
+    <tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="text-align:left;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Model</th>
+      <th style="text-align:left;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Storage</th>
+      <th style="text-align:center;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Qty</th>
+      <th style="text-align:right;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Price</th>
+    </tr>
+  </thead>
   <tbody>
-    <% var hasStock = false; %>
     <% items.forEach(function(d) { %>
-      <% if (d.status !== "Sold") { hasStock = true; %>
-        <tr>
-          <td><span class="badge"><%= d.product_type || "-" %></span></td>
-          <td><%= d.os || "-" %></td>
-          <td><strong><%= d.model %></strong></td>
-          <td><%= d.storage || "-" %></td>
-          <td><%= d.color || "-" %></td>
-          <td><%= d.condition %></td>
-          <td style="white-space:nowrap;">&#8373;<%= Number(d.sale_price).toLocaleString() %></td>
-          <td class="mono" style="font-size:11px;"><%= d.imeis || "-" %></td>
-          <td><a class="btn small" href="/inventory/<%= d.id %>/edit">Edit</a></td>
-        </tr>
-      <% } %>
+      <tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:10px 8px;">
+          <span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:4px;margin-right:6px;"><%= d.product_type||"-" %></span>
+          <strong><%= d.model %></strong>
+        </td>
+        <td style="padding:10px 8px;color:#6b7280;"><%= d.storage||"-" %></td>
+        <td style="padding:10px 8px;text-align:center;">
+          <span style="font-weight:700;font-size:16px;color:#0f2d62;"><%= d.in_stock||0 %></span>
+          <% if (d.sold > 0) { %><span style="font-size:11px;color:#ef4444;margin-left:4px;">(-<%= d.sold %>)</span><% } %>
+        </td>
+        <td style="padding:10px 8px;text-align:right;font-weight:600;">&#8373;<%= Number(d.sale_price||0).toLocaleString() %></td>
+      </tr>
     <% }); %>
-    <% if (!hasStock) { %>
-      <tr><td colspan="9" style="text-align:center;color:#999;padding:24px;">No items in stock</td></tr>
-    <% } %>
   </tbody>
 </table>
 
-<!-- Sold Table -->
-<h2 style="color:#ef4444;margin-top:32px;margin-bottom:8px;">Sold</h2>
-<table class="data-table">
-  <thead><tr>
-    <th>Model</th><th>Storage</th><th>Color</th><th>Price</th><th>IMEI</th>
-  </tr></thead>
-  <tbody>
-    <% var hasSold = false; %>
-    <% items.forEach(function(d) { %>
-      <% if (d.status === "Sold") { hasSold = true; %>
-        <tr style="opacity:0.7;">
-          <td><%= d.model %></td>
-          <td><%= d.storage || "-" %></td>
-          <td><%= d.color || "-" %></td>
-          <td>&#8373;<%= Number(d.sale_price).toLocaleString() %></td>
-          <td class="mono" style="font-size:11px;"><%= d.imeis || "-" %></td>
-        </tr>
-      <% } %>
-    <% }); %>
-    <% if (!hasSold) { %>
-      <tr><td colspan="5" style="text-align:center;color:#999;padding:24px;">No sold items</td></tr>
-    <% } %>
-  </tbody>
-</table>
-
-<style>
-.data-table { width:100%; border-collapse:collapse; font-size:13px; }
-.data-table th { text-align:left; padding:8px; border-bottom:2px solid #e5e7eb; color:#6b7280; font-weight:600; font-size:11px; text-transform:uppercase; }
-.data-table td { padding:8px; border-bottom:1px solid #f3f4f6; }
-.data-table tr:hover { background:#f9fafb; }
-.badge { background:#eff6ff; color:#1d4ed8; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
-.btn.small { padding:4px 10px; font-size:12px; }
-.mono { font-family:monospace; }
-@media (max-width:768px) { .data-table { font-size:11px; } .data-table th, .data-table td { padding:6px 4px; } }
-</style>
+<% if (items.length === 0) { %>
+  <div style="text-align:center;color:#999;padding:40px;">No stock yet.</div>
+<% } %>
