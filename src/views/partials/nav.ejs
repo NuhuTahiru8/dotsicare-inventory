@@ -30,11 +30,49 @@
           <a href="/customers">Customers</a>
           <a href="/installments">Installments</a>
         <% } %>
-      </nav>
+      
+<div id="branchConfirmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:28px;max-width:360px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+    <h3 style="margin:0 0 8px;">Switch Branch?</h3>
+    <p style="color:#666;margin:0 0 20px;font-size:14px;" id="branchConfirmMsg"></p>
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button id="branchConfirmYes" style="background:#0f2d62;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-weight:600;">Yes, Switch</button>
+      <button onclick="closeBranchConfirm()" style="background:#e5e7eb;color:#333;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var pendingBranch = null;
+function confirmBranchSwitch(newBranch) {
+  var current = document.getElementById("branchSelect").getAttribute("data-current");
+  if (newBranch === current) return;
+  
+  pendingBranch = newBranch;
+  var branchNames = { Konongo: "Konongo", Agogo: "Agogo", "Heroes Gate": "Heroes Gate" };
+  document.getElementById("branchConfirmMsg").textContent = "Switch from " + (branchNames[current]||current) + " to " + (branchNames[newBranch]||newBranch) + "?";
+  document.getElementById("branchConfirmOverlay").style.display = "flex";
+}
+
+document.getElementById("branchConfirmYes").addEventListener("click", function() {
+  if (pendingBranch) {
+    document.querySelector("select[name=branch]").value = pendingBranch;
+    document.querySelector("form.branch-switch").submit();
+  }
+});
+
+function closeBranchConfirm() {
+  document.getElementById("branchConfirmOverlay").style.display = "none";
+  document.getElementById("branchSelect").value = document.getElementById("branchSelect").getAttribute("data-current");
+  pendingBranch = null;
+}
+</script>
+
+</nav>
       <div class="userbox">
         <% if (currentBranch) { %>
           <form class="branch-switch" method="post" action="/branch">
-            <select name="branch" onchange="this.form.submit()" aria-label="Switch shop">
+            <select name="branch" id="branchSelect" onchange="confirmBranchSwitch(this.value)" aria-label="Switch shop" data-current="<%= currentBranch.key %>">
               <% for (const branch of branches) { %>
                 <option value="<%= branch.key %>" <%= currentBranch.key === branch.key ? "selected" : "" %>><%= branch.name %></option>
               <% } %>
@@ -49,7 +87,45 @@
     <% } else { %>
       <nav class="nav">
         <a href="/login">Login</a>
-      </nav>
+      
+<div id="branchConfirmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:28px;max-width:360px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+    <h3 style="margin:0 0 8px;">Switch Branch?</h3>
+    <p style="color:#666;margin:0 0 20px;font-size:14px;" id="branchConfirmMsg"></p>
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button id="branchConfirmYes" style="background:#0f2d62;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-weight:600;">Yes, Switch</button>
+      <button onclick="closeBranchConfirm()" style="background:#e5e7eb;color:#333;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var pendingBranch = null;
+function confirmBranchSwitch(newBranch) {
+  var current = document.getElementById("branchSelect").getAttribute("data-current");
+  if (newBranch === current) return;
+  
+  pendingBranch = newBranch;
+  var branchNames = { Konongo: "Konongo", Agogo: "Agogo", "Heroes Gate": "Heroes Gate" };
+  document.getElementById("branchConfirmMsg").textContent = "Switch from " + (branchNames[current]||current) + " to " + (branchNames[newBranch]||newBranch) + "?";
+  document.getElementById("branchConfirmOverlay").style.display = "flex";
+}
+
+document.getElementById("branchConfirmYes").addEventListener("click", function() {
+  if (pendingBranch) {
+    document.querySelector("select[name=branch]").value = pendingBranch;
+    document.querySelector("form.branch-switch").submit();
+  }
+});
+
+function closeBranchConfirm() {
+  document.getElementById("branchConfirmOverlay").style.display = "none";
+  document.getElementById("branchSelect").value = document.getElementById("branchSelect").getAttribute("data-current");
+  pendingBranch = null;
+}
+</script>
+
+</nav>
     <% } %>
   </div>
 </header>
