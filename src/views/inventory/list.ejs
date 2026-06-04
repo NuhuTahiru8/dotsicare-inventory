@@ -32,7 +32,7 @@
       <div style="font-size:28px;font-weight:800;color:#dc2626;"><%= totalSold %></div>
       <div style="font-size:12px;color:#dc2626;">Sold</div>
     </div>
-    <button id="toggleModelBtn" onclick="toggleModelBreakdown()" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;">
+    <button id="toggleModelBtn" onclick="toggleModelBreakdown()" style="background:linear-gradient(135deg,#0f2d62,#1e40af);color:#fff;border:none;border-radius:12px;padding:14px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 14px rgba(15,45,98,0.3);letter-spacing:0.3px;" onmouseover="this.style.transform='scale(1.03)';this.style.boxShadow='0 6px 20px rgba(15,45,98,0.4)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 14px rgba(15,45,98,0.3)'">
       Total Per Model (<%= modelKeys.length %>)
     </button>
   </div>
