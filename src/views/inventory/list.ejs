@@ -1,84 +1,110 @@
-﻿<%- include("../partials/head", { title: "Inventory" }) %>
+<%- include("../partials/head", { title: "Inventory" }) %>
 <%- include("../partials/nav") %>
 
-<div class="row">
-  <div>
-    <h1>Inventory</h1>
-  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 16px;margin:8px 0 20px;font-size:15px;">Total Devices: <strong><%= items.length %></strong> in stock</div>
-    <% if (currentBranch) { %>
-      <div class="muted"><%= currentBranch.name %> stock only</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin:16px 0 24px;">
-    <% 
-      var stockSummary = {};
-      items.forEach(function(d) {
-        var key = d.model + " " + (d.storage || "") + " " + (d.color || "");
-        if (!stockSummary[key]) stockSummary[key] = 0;
-        stockSummary[key]++;
-      });
-      Object.keys(stockSummary).sort().forEach(function(k) { %>
-        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 12px;font-size:13px;">
-          <strong><%= k %></strong>: <%= stockSummary[k] %> in stock
-        </div>
-    <% }); %>
-  </div>
-
-    <% } %>
-  </div>
-  <a class="btn" href="/inventory/new">Add Stock</a>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+  <h1 style="margin:0;">Inventory</h1>
+  <a class="btn btn-primary" href="/inventory/new">+ Add Stock</a>
 </div>
 
-<% if (message) { %>
-  <div class="panel"><span class="pill ok"><%= message %></span></div>
-<% } %>
+<!-- Stock Summary Cards -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:24px;">
+  <%
+    var stockByModel = {};
+    var soldByModel = {};
+    var totalInStock = 0;
+    var totalSold = 0;
+    items.forEach(function(d) {
+      var key = d.model + " " + (d.storage||"") + " " + (d.color||"");
+      var count = d.status === "Sold" ? 0 : 1;
+      if (d.status === "Sold") {
+        if (!soldByModel[key]) soldByModel[key] = 0;
+        soldByModel[key]++;
+        totalSold++;
+      } else {
+        if (!stockByModel[key]) stockByModel[key] = 0;
+        stockByModel[key]++;
+        totalInStock++;
+      }
+    });
+  %>
+  <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:12px;padding:16px;text-align:center;">
+    <div style="font-size:32px;font-weight:800;color:#0369a1;"><%= totalInStock %></div>
+    <div style="font-size:13px;color:#0369a1;">In Stock</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fecaca;border-radius:12px;padding:16px;text-align:center;">
+    <div style="font-size:32px;font-weight:800;color:#dc2626;"><%= totalSold %></div>
+    <div style="font-size:13px;color:#dc2626;">Sold</div>
+  </div>
+  <% Object.keys(stockByModel).sort().forEach(function(k) { %>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;">
+      <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:2px;"><%= k %></div>
+      <div style="font-size:20px;font-weight:800;color:#0f2d62;"><%= stockByModel[k] %></div>
+      <div style="font-size:11px;color:#6b7280;">available</div>
+    </div>
+  <% }); %>
+</div>
 
-<% if (error) { %>
-  <div class="alert"><%= error %></div>
-<% } %>
-
-<table class="table">
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Type</th>
-      <th>OS</th>
-      <th>Model</th>
-      <th>Variant</th>
-      <th>Condition</th>
-      <th>IMEI(s)</th>
-      <th>Status</th>
-      <th>Cost</th>
-      <th>Sale</th>
-      <th>Added</th>
-      <% if (currentUser && currentUser.role === "Admin") { %>
-        <th>Actions</th>
-      <% } %>
-    </tr>
-  </thead>
+<!-- In Stock Table -->
+<h2 style="color:#22c55e;margin-bottom:8px;">In Stock</h2>
+<table class="data-table">
+  <thead><tr>
+    <th>Type</th><th>OS</th><th>Model</th><th>Storage</th><th>Color</th><th>Condition</th><th>Price</th><th>IMEI</th><th></th>
+  </tr></thead>
   <tbody>
-    <% for (const d of items) { %>
-      <tr>
-        <td><%= d.first_id %></td>
-        <td><%= d.model %></td>
-        <td><%= [d.storage, d.color].filter(Boolean).join(" / ") %></td>
-        <td><%= d.condition %></td>
-        <td class="mono"><%= d.imeis || "" %></td>
-        <td><span class="pill <%= d.status === "InStock" ? "ok" : "muted" %>"><%= d.status %></span></td>
-        <td>&#8373; <%= currency(d.cost_price) %></td>
-        <td>&#8373; <%= currency(d.sale_price) %></td>
-        <td><%= (d.created_at || "").slice(0, 10) %></td>
-        <% if (currentUser && currentUser.role === "Admin") { %>
-          <td>
-            <div class="table-actions">
-              <a class="btn small secondary" href="/inventory/<%= d.first_id %>/edit">Edit</a>
-              <form method="post" action="/inventory/<%= d.first_id %>/delete" onsubmit="return confirm('Delete this stock item? This cannot be undone.');">
-                <button class="btn small danger" type="submit" <%= d.status !== "InStock" ? "disabled" : "" %>>Delete</button>
-              </form>
-            </div>
-          </td>
-        <% } %>
-      </tr>
+    <% var hasStock = false; %>
+    <% items.forEach(function(d) { %>
+      <% if (d.status !== "Sold") { hasStock = true; %>
+        <tr>
+          <td><span class="badge"><%= d.product_type || "-" %></span></td>
+          <td><%= d.os || "-" %></td>
+          <td><strong><%= d.model %></strong></td>
+          <td><%= d.storage || "-" %></td>
+          <td><%= d.color || "-" %></td>
+          <td><%= d.condition %></td>
+          <td style="white-space:nowrap;">&#8373;<%= Number(d.sale_price).toLocaleString() %></td>
+          <td class="mono" style="font-size:11px;"><%= d.imeis || "-" %></td>
+          <td><a class="btn small" href="/inventory/<%= d.id %>/edit">Edit</a></td>
+        </tr>
+      <% } %>
+    <% }); %>
+    <% if (!hasStock) { %>
+      <tr><td colspan="9" style="text-align:center;color:#999;padding:24px;">No items in stock</td></tr>
     <% } %>
   </tbody>
 </table>
 
-<%- include("../partials/foot") %>
+<!-- Sold Table -->
+<h2 style="color:#ef4444;margin-top:32px;margin-bottom:8px;">Sold</h2>
+<table class="data-table">
+  <thead><tr>
+    <th>Model</th><th>Storage</th><th>Color</th><th>Price</th><th>IMEI</th>
+  </tr></thead>
+  <tbody>
+    <% var hasSold = false; %>
+    <% items.forEach(function(d) { %>
+      <% if (d.status === "Sold") { hasSold = true; %>
+        <tr style="opacity:0.7;">
+          <td><%= d.model %></td>
+          <td><%= d.storage || "-" %></td>
+          <td><%= d.color || "-" %></td>
+          <td>&#8373;<%= Number(d.sale_price).toLocaleString() %></td>
+          <td class="mono" style="font-size:11px;"><%= d.imeis || "-" %></td>
+        </tr>
+      <% } %>
+    <% }); %>
+    <% if (!hasSold) { %>
+      <tr><td colspan="5" style="text-align:center;color:#999;padding:24px;">No sold items</td></tr>
+    <% } %>
+  </tbody>
+</table>
+
+<style>
+.data-table { width:100%; border-collapse:collapse; font-size:13px; }
+.data-table th { text-align:left; padding:8px; border-bottom:2px solid #e5e7eb; color:#6b7280; font-weight:600; font-size:11px; text-transform:uppercase; }
+.data-table td { padding:8px; border-bottom:1px solid #f3f4f6; }
+.data-table tr:hover { background:#f9fafb; }
+.badge { background:#eff6ff; color:#1d4ed8; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+.btn.small { padding:4px 10px; font-size:12px; }
+.mono { font-family:monospace; }
+@media (max-width:768px) { .data-table { font-size:11px; } .data-table th, .data-table td { padding:6px 4px; } }
+</style>
