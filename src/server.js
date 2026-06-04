@@ -953,7 +953,7 @@ function insertDeviceFromBody(body) {
 function getDeviceWithImeis(id, branch) {
   return db
     .prepare(
-      `SELECT d.*, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
+      `SELECT d.*, d.product_type, d.os, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
        FROM devices d
        LEFT JOIN device_imeis di ON di.device_id = d.id
        LEFT JOIN stock_batches sb ON sb.id = d.stock_batch_id
@@ -1037,7 +1037,7 @@ app.get("/dashboard", requireAuth, (req, res) => {
 app.get("/admin", requireAdmin, (req, res) => {
   const recentStock = db
     .prepare(
-      `SELECT d.*, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
+      `SELECT d.*, d.product_type, d.os, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
        FROM devices d
        LEFT JOIN device_imeis di ON di.device_id = d.id
        LEFT JOIN stock_batches sb ON sb.id = d.stock_batch_id
@@ -1197,7 +1197,7 @@ app.post("/admin/store/:id/delete", requireAdmin, (req, res) => {
 app.post("/admin/stock", requireAdmin, (req, res) => {
   const recentStock = db
     .prepare(
-      `SELECT d.*, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
+      `SELECT d.*, d.product_type, d.os, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
        FROM devices d
        LEFT JOIN device_imeis di ON di.device_id = d.id
        LEFT JOIN stock_batches sb ON sb.id = d.stock_batch_id
@@ -1389,7 +1389,7 @@ app.get("/reports/profit", requireAdmin, (req, res) => {
 app.get("/inventory", requireAuth, (req, res) => {
   const items = db
     .prepare(
-      `SELECT d.*, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
+      `SELECT d.*, d.product_type, d.os, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
        FROM devices d
        LEFT JOIN device_imeis di ON di.device_id = d.id
        LEFT JOIN stock_batches sb ON sb.id = d.stock_batch_id
@@ -1572,7 +1572,7 @@ app.get("/sales", requireAuth, (req, res) => {
 app.get("/sales/new", requireAuth, (req, res) => {
   const devices = db
     .prepare(
-      `SELECT d.*, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
+      `SELECT d.*, d.product_type, d.os, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
        FROM devices d
        LEFT JOIN device_imeis di ON di.device_id = d.id
        LEFT JOIN stock_batches sb ON sb.id = d.stock_batch_id
@@ -1628,7 +1628,7 @@ app.post("/sales/new", requireAuth, (req, res) => {
 
   const devices = db
     .prepare(
-      `SELECT d.*, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
+      `SELECT d.*, d.product_type, d.os, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
        FROM devices d
        LEFT JOIN device_imeis di ON di.device_id = d.id
        LEFT JOIN stock_batches sb ON sb.id = d.stock_batch_id

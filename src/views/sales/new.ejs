@@ -75,6 +75,27 @@
 
     <!-- DEVICE SEARCH -->
     <label>
+      Sale Type *
+      <div class="row" style="gap:12px;margin-bottom:12px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="radio" name="product_type" value="Phone" checked onchange="toggleProductType()" /> Phone
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="radio" name="product_type" value="Accessory" onchange="toggleProductType()" /> Accessory
+        </label>
+      </div>
+
+      <div id="phoneOsSection">
+        <label>
+          Operating System
+          <select name="device_os" id="deviceOs">
+            <option value="iOS">iOS</option>
+            <option value="Android">Android</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="imeiSection">
       IMEI *
       <input type="text" id="imeiSearch" placeholder="Type IMEI to find device (e.g. 1234)..." autocomplete="off" style="font-family:monospace;font-size:15px;" />
       <span class="searchable-hint">Type IMEI - matching device will auto-fill. Or search below.</span>
@@ -182,6 +203,11 @@
 // ─── DEVICE SEARCH ───
 var allDevices = <%- JSON.stringify(devices.map(d => ({ id: d.id, model: d.model, storage: d.storage || "", color: d.color || "", imeis: d.imeis || "", condition: d.condition, sale_price: d.sale_price || 0 }))) %>;
 
+function toggleProductType() {
+  var type = document.querySelector('input[name="product_type"]:checked').value;
+  document.getElementById("imeiSection").style.display = type === "Phone" ? "block" : "none";
+  document.getElementById("phoneOsSection").style.display = type === "Phone" ? "block" : "none";
+}
 var imeiSearch = document.getElementById("imeiSearch");
 var deviceSearch = document.getElementById("deviceSearch");
 var deviceResults = document.getElementById("deviceResults");
