@@ -770,7 +770,14 @@ app.post("/login", (req, res) => {
 app.post("/branch", requireAuth, (req, res) => {
   const branch = normalizeBranch(req.body.branch);
   if (branch) setSessionCookie(res, sessionPayload(req, branch));
-  res.redirect("/dashboard");
+  // Redirect back to same page, or dashboard as fallback
+  var back = (req.get("Referer") || "").toString();
+  var host = (req.get("Host") || "").toString();
+  if (back && host && back.indexOf(host) !== -1 && back.indexOf("/login") === -1) {
+    res.redirect(back);
+  } else {
+    res.redirect("/dashboard");
+  }
 });
 
 app.post("/logout", (req, res) => {
