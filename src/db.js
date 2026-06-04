@@ -19,7 +19,7 @@ const schemaPath = path.join(rootDir, "src", "schema.sql");
 const schemaSql = fs.readFileSync(schemaPath, "utf-8");
 db.exec(schemaSql);
 
-const knownBranches = ["Konongo", "Agogo"];
+const knownBranches = ["Konongo", "Agogo", "Heroes Gate"];
 
 function hasColumn(table, column) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all();

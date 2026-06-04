@@ -36,7 +36,8 @@ const upload = multer({
 const sessionSecret = (process.env.SESSION_SECRET || "dev-secret-change-me").toString();
 const branches = Object.freeze([
   { key: "Konongo", name: "Konongo" },
-  { key: "Agogo", name: "Agogo" }
+  { key: "Agogo", name: "Agogo" },
+  { key: "Heroes Gate", name: "Heroes Gate" }
 ]);
 const storeCategories = Object.freeze([
   "Smartphones & Mobiles",
@@ -819,7 +820,7 @@ app.get("/", (req, res) => {
         addressLocality: branch,
         addressCountry: "GH"
       },
-      areaServed: ["Konongo", "Agogo", "Ghana"],
+      areaServed: ["Konongo", "Agogo", "Heroes Gate", "Ghana"],
       description: storeSeoDescription,
       sameAs: []
     }
