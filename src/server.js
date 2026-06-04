@@ -2111,8 +2111,10 @@ function substrDate(iso) {
 
 
 app.get("/credits", requireAdmin, (req, res) => {
-  const smsCredits = db.prepare("SELECT sms_credits FROM users WHERE id = @id").get({ id: req.user.id })?.sms_credits || 0;
-  res.render("credits", { smsCredits });
+  const userRow = db.prepare("SELECT sms_credits, name FROM users WHERE id = @id").get({ id: req.user.id });
+  const smsCredits = userRow?.sms_credits || 0;
+  const userName = userRow?.name || "user";
+  res.render("credits", { smsCredits, userName });
 });
 
 
