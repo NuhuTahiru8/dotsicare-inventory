@@ -88,6 +88,7 @@
         <div class="searchable-results" id="deviceResults"></div>
       </div>
       <span class="searchable-hint">Type e.g. "XR", "12 Pro", "128GB", or last 4 IMEI digits</span>
+      <div id="selectedDeviceImei" style="margin-top:6px;font-size:13px;color:#0f2d62;font-weight:600;display:none;"></div>
     </label>
 
     <label>
@@ -254,6 +255,15 @@ function selectDevice(id, label) {
   // auto-fill sale price
   var dev = allDevices.find(function (d) { return d.id === id; });
   selectedDevicePrice = dev ? (dev.sale_price || 0) : 0;
+
+  // Show IMEI
+  var imeiEl = document.getElementById("selectedDeviceImei");
+  if (dev && dev.imeis) {
+    imeiEl.style.display = "block";
+    imeiEl.textContent = "IMEI: " + dev.imeis;
+  } else {
+    imeiEl.style.display = "none";
+  }
   var priceInput = document.querySelector('input[name="sale_price"]');
   if (dev && dev.sale_price) {
     if (priceInput && !priceInput.value) {
