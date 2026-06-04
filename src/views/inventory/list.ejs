@@ -1,6 +1,12 @@
 <%- include("../partials/head", { title: "Inventory" }) %>
 <%- include("../partials/nav") %>
 
+<style>
+.cat-card { cursor:pointer; transition:all .2s; border:2px solid transparent; }
+.cat-card:hover { transform:translateY(-2px); }
+.cat-card.active { border-color:#0f2d62 !important; }
+</style>
+
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
   <h1 style="margin:0;">Inventory</h1>
   <a class="btn btn-primary" href="/inventory/new">+ Add Stock</a>
@@ -8,92 +14,99 @@
 
 <%
   var totalStock = 0, totalSold = 0;
-  var catCount = { iOS:0, Android:0, Accessory:0 };
-  var modelCount = {};
-  var soldByModel = {};
-  var allModels = {};
+  var cat = { iOS:{in:0,sold:0}, Android:{in:0,sold:0}, Accessory:{in:0,sold:0} };
+  var models = {};
   
   items.forEach(function(d) {
     totalStock += d.in_stock || 0;
     totalSold += d.sold || 0;
-    
-    var cat = d.product_type === "Accessory" ? "Accessory" : (d.os || "Other");
-    catCount[cat] = (catCount[cat] || 0) + (d.in_stock || 0);
-    
+    var c = d.product_type === "Accessory" ? "Accessory" : (d.os || "Other");
+    if (cat[c]) { cat[c].in += d.in_stock||0; cat[c].sold += d.sold||0; }
     var key = d.model + " " + (d.storage||"");
-    modelCount[key] = (modelCount[key] || 0) + (d.in_stock || 0);
-    if (d.sold > 0) soldByModel[key] = (soldByModel[key] || 0) + d.sold;
-    allModels[key] = 1;
+    if (!models[key]) models[key] = { in:0, sold:0, price:d.sale_price, type:d.product_type, os:d.os, color:d.color||"" };
+    models[key].in += d.in_stock||0;
+    models[key].sold += d.sold||0;
   });
-  
-  var sortedModels = Object.keys(modelCount).sort();
 %>
 
-<!-- Stock Overview Cards -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
-  <div style="background:#f0fdf4;border:2px solid #22c55e;border-radius:12px;padding:20px;text-align:center;">
-    <div style="font-size:36px;font-weight:800;color:#15803d;"><%= totalStock %></div>
-    <div style="font-size:13px;color:#16a34a;font-weight:600;">In Stock</div>
+<!-- Top Stats -->
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px;">
+  <div class="cat-card active" onclick="filterCat('all')" id="cat-all" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:14px;padding:20px;text-align:center;">
+    <div style="font-size:12px;color:#16a34a;text-transform:uppercase;letter-spacing:1px;font-weight:600;">In Stock</div>
+    <div style="font-size:40px;font-weight:800;color:#15803d;"><%= totalStock %></div>
   </div>
-  <div style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:20px;text-align:center;">
-    <div style="font-size:36px;font-weight:800;color:#b91c1c;"><%= totalSold %></div>
-    <div style="font-size:13px;color:#dc2626;font-weight:600;">Sold</div>
-  </div>
-  <div style="background:#eff6ff;border:2px solid #3b82f6;border-radius:12px;padding:20px;text-align:center;">
-    <div style="font-size:14px;color:#1d4ed8;margin-bottom:6px;font-weight:600;">By Type</div>
-    <div style="font-size:13px;color:#1e40af;line-height:1.8;">
-      iOS: <strong><%= catCount.iOS||0 %></strong><br>
-      Android: <strong><%= catCount.Android||0 %></strong><br>
-      Acc: <strong><%= catCount.Accessory||0 %></strong>
-    </div>
-  </div>
-  <div style="background:#f8fafc;border:2px solid #64748b;border-radius:12px;padding:20px;text-align:center;">
-    <div style="font-size:14px;color:#475569;margin-bottom:6px;font-weight:600;">Models</div>
-    <div style="font-size:28px;font-weight:800;color:#0f2d62;"><%= sortedModels.length %></div>
+  <div class="cat-card" onclick="filterCat('sold')" id="cat-sold" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border-radius:14px;padding:20px;text-align:center;">
+    <div style="font-size:12px;color:#dc2626;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Sold</div>
+    <div style="font-size:40px;font-weight:800;color:#b91c1c;"><%= totalSold %></div>
   </div>
 </div>
 
-<!-- Per Model Breakdown -->
-<div style="margin-bottom:16px;">
-  <h3 style="color:#0f2d62;font-size:16px;margin-bottom:8px;">Per Model</h3>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
-    <% sortedModels.forEach(function(k) { %>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;border:1px solid #e5e7eb;">
-        <span style="font-weight:600;"><%= k %></span>
-        <span style="font-weight:800;color:#0f2d62;"><%= modelCount[k] %> <% if (soldByModel[k] > 0) { %><span style="font-size:10px;color:#ef4444;font-weight:400;"> -<%= soldByModel[k] %></span><% } %></span>
-      </div>
-    <% }); %>
-  </div>
+<!-- Category Filters -->
+<div style="display:flex;gap:8px;margin-bottom:20px;">
+  <button class="cat-filter active" onclick="filterModel('all')" id="mf-all" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">All</button>
+  <button class="cat-filter" onclick="filterModel('iOS')" id="mf-iOS" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;">iOS (<%= cat.iOS.in %>)</button>
+  <button class="cat-filter" onclick="filterModel('Android')" id="mf-Android" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;">Android (<%= cat.Android.in %>)</button>
+  <button class="cat-filter" onclick="filterModel('Accessory')" id="mf-Accessory" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;">Accessories (<%= cat.Accessory.in %>)</button>
 </div>
 
-<!-- Clean Table -->
-<table style="width:100%;border-collapse:collapse;font-size:14px;">
-  <thead>
-    <tr style="border-bottom:2px solid #e5e7eb;">
-      <th style="text-align:left;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Model</th>
-      <th style="text-align:left;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Storage</th>
-      <th style="text-align:center;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Qty</th>
-      <th style="text-align:right;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Price</th>
-    </tr>
-  </thead>
-  <tbody>
-    <% items.forEach(function(d) { %>
-      <tr style="border-bottom:1px solid #f3f4f6;">
-        <td style="padding:10px 8px;">
-          <span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:4px;margin-right:6px;"><%= d.product_type||"-" %></span>
-          <strong><%= d.model %></strong>
-        </td>
-        <td style="padding:10px 8px;color:#6b7280;"><%= d.storage||"-" %></td>
-        <td style="padding:10px 8px;text-align:center;">
-          <span style="font-weight:700;font-size:16px;color:#0f2d62;"><%= d.in_stock||0 %></span>
-          <% if (d.sold > 0) { %><span style="font-size:11px;color:#ef4444;margin-left:4px;">(-<%= d.sold %>)</span><% } %>
-        </td>
-        <td style="padding:10px 8px;text-align:right;font-weight:600;">&#8373;<%= Number(d.sale_price||0).toLocaleString() %></td>
-      </tr>
-    <% }); %>
-  </tbody>
-</table>
+<!-- Per Model -->
+<div id="modelList"></div>
 
-<% if (items.length === 0) { %>
-  <div style="text-align:center;color:#999;padding:40px;">No stock yet.</div>
-<% } %>
+<script>
+var allModels = <%- JSON.stringify(models) %>;
+var currentCat = 'all';
+
+function filterCat(cat) {
+  currentCat = cat;
+  document.querySelectorAll('.cat-card').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('cat-'+cat).classList.add('active');
+  renderModels();
+}
+
+function filterModel(os) {
+  document.querySelectorAll('.cat-filter').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('mf-'+os).classList.add('active');
+  renderModels(os);
+}
+
+function renderModels(osFilter) {
+  var filter = osFilter || 'all';
+  var html = '';
+  var keys = Object.keys(allModels).sort();
+  var shown = 0;
+  
+  keys.forEach(function(k) {
+    var m = allModels[k];
+    var show = filter === 'all' || 
+      (filter === 'iOS' && m.os === 'iOS') ||
+      (filter === 'Android' && m.os === 'Android') ||
+      (filter === 'Accessory' && m.type === 'Accessory');
+    
+    if (!show) return;
+    shown++;
+    
+    var val = currentCat === 'sold' ? m.sold : m.in;
+    var color = currentCat === 'sold' ? '#b91c1c' : (val > 0 ? '#15803d' : '#9ca3af');
+    
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fff;border:1px solid #f3f4f6;border-radius:10px;margin-bottom:4px;">';
+    html += '<div>';
+    html += '<span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:1px 6px;border-radius:4px;margin-right:6px;">' + (m.type||'-') + '</span>';
+    html += '<strong style="font-size:14px;">' + k + '</strong>';
+    if (m.color) html += ' <span style="font-size:12px;color:#9ca3af;">' + m.color + '</span>';
+    html += '</div>';
+    html += '<div style="text-align:right;">';
+    html += '<span style="font-size:20px;font-weight:800;color:' + color + ';">' + val + '</span>';
+    html += '<div style="font-size:11px;color:#6b7280;">&#8373;' + Number(m.price||0).toLocaleString() + '</div>';
+    html += '</div>';
+    html += '</div>';
+  });
+  
+  if (shown === 0) {
+    html = '<div style="text-align:center;color:#999;padding:40px;">No items</div>';
+  }
+  
+  document.getElementById('modelList').innerHTML = html;
+}
+
+renderModels('all');
+</script>
