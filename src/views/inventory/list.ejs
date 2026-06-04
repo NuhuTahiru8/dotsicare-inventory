@@ -1,137 +1,119 @@
 <%- include("../partials/head", { title: "Inventory" }) %>
 <%- include("../partials/nav") %>
 
-<style>
-.cat-card { cursor:pointer; transition:all .2s; border:2px solid transparent; }
-.cat-card:hover { transform:translateY(-2px); }
-.cat-card.active { border-color:#0f2d62 !important; }
-</style>
-
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
   <h1 style="margin:0;">Inventory</h1>
   <a class="btn btn-primary" href="/inventory/new">+ Add Stock</a>
 </div>
 
 <%
-  var totalStock = 0, totalSold = 0;
-  var cat = { iOS:{in:0,sold:0}, Android:{in:0,sold:0}, Accessory:{in:0,sold:0} };
-  var models = {};
-  
+  var data = [];
+  var totalIn = 0, totalSold = 0;
+  var catIn = {iOS:0,Android:0,Accessory:0}, catSold = {iOS:0,Android:0,Accessory:0};
+  var allModels = new Set(), allStorages = new Set(), allColors = new Set();
+
   items.forEach(function(d) {
-    totalStock += d.in_stock || 0;
-    totalSold += d.sold || 0;
     var c = d.product_type === "Accessory" ? "Accessory" : (d.os || "Other");
-    if (cat[c]) { cat[c].in += d.in_stock||0; cat[c].sold += d.sold||0; }
-    var key = d.model + " " + (d.storage||"");
-    if (!models[key]) models[key] = { in:0, sold:0, price:d.sale_price, type:d.product_type, os:d.os, color:d.color||"" };
-    models[key].in += d.in_stock||0;
-    models[key].sold += d.sold||0;
+    var entry = {
+      model: d.model, storage: d.storage||"", color: d.color||"", type: d.product_type||"", os: c,
+      in_stock: d.in_stock||0, sold: d.sold||0, price: d.sale_price||0
+    };
+    data.push(entry);
+    totalIn += entry.in_stock; totalSold += entry.sold;
+    catIn[c] += entry.in_stock; catSold[c] += entry.sold;
+    allModels.add(d.model);
+    if (d.storage) allStorages.add(d.storage);
+    if (d.color) allColors.add(d.color);
   });
 %>
 
-<!-- Top Stats -->
+<style>
+.cat-card { cursor:pointer; transition:all .2s; border:2px solid transparent; }
+.cat-card:hover { transform:translateY(-2px); }
+.cat-card.active { border-color:#0f2d62 !important; }
+.filter-select { padding:8px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:13px; background:#fff; }
+</style>
+
 <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px;">
-  <div class="cat-card active" onclick="filterCat('all')" id="cat-all" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:14px;padding:20px;text-align:center;">
+  <div class="cat-card active" onclick="switchView('in')" id="card-in" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #22c55e;border-radius:14px;padding:20px;text-align:center;">
     <div style="font-size:12px;color:#16a34a;text-transform:uppercase;letter-spacing:1px;font-weight:600;">In Stock</div>
-    <div style="font-size:40px;font-weight:800;color:#15803d;"><%= totalStock %></div>
+    <div style="font-size:40px;font-weight:800;color:#15803d;"><%= totalIn %></div>
+    <div style="font-size:11px;color:#16a34a;margin-top:4px;">iOS:<%=catIn.iOS%> | Android:<%=catIn.Android%> | Acc:<%=catIn.Accessory%></div>
   </div>
-  <div class="cat-card" onclick="filterCat('sold')" id="cat-sold" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border-radius:14px;padding:20px;text-align:center;">
+  <div class="cat-card" onclick="switchView('sold')" id="card-sold" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border-radius:14px;padding:20px;text-align:center;">
     <div style="font-size:12px;color:#dc2626;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Sold</div>
     <div style="font-size:40px;font-weight:800;color:#b91c1c;"><%= totalSold %></div>
+    <div style="font-size:11px;color:#dc2626;margin-top:4px;">iOS:<%=catSold.iOS%> | Android:<%=catSold.Android%> | Acc:<%=catSold.Accessory%></div>
   </div>
 </div>
 
-<!-- Category Filters -->
-<div style="display:flex;gap:8px;margin-bottom:20px;">
-  <button class="cat-filter active" onclick="filterModel('all')" id="mf-all" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;font-weight:600;">All</button>
-  <button class="cat-filter" onclick="filterModel('iOS')" id="mf-iOS" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;">iOS (<%= cat.iOS.in %>)</button>
-  <button class="cat-filter" onclick="filterModel('Android')" id="mf-Android" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;">Android (<%= cat.Android.in %>)</button>
-  <button class="cat-filter" onclick="filterModel('Accessory')" id="mf-Accessory" style="padding:8px 18px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px;">Accessories (<%= cat.Accessory.in %>)</button>
-
-  <select id="filterStorage" onchange="applyFilters()" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:20px;font-size:13px;margin-left:8px;">
-    <option value="all">All Storage</option>
+<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+  <select class="filter-select" id="fOS" onchange="render()">
+    <option value="all">All Types</option>
+    <option value="iOS">iOS</option>
+    <option value="Android">Android</option>
+    <option value="Accessory">Accessories</option>
   </select>
-  <select id="filterColor" onchange="applyFilters()" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:20px;font-size:13px;margin-left:8px;">
+  <select class="filter-select" id="fModel" onchange="render()">
+    <option value="all">All Models</option>
+    <% Array.from(allModels).sort().forEach(function(m) { %><option value="<%= m %>"><%= m %></option><% }); %>
+  </select>
+  <select class="filter-select" id="fStorage" onchange="render()">
+    <option value="all">All Storage</option>
+    <% Array.from(allStorages).sort().forEach(function(s) { %><option value="<%= s %>"><%= s %></option><% }); %>
+  </select>
+  <select class="filter-select" id="fColor" onchange="render()">
     <option value="all">All Colors</option>
-  </select></div>
+    <% Array.from(allColors).sort().forEach(function(c) { %><option value="<%= c %>"><%= c %></option><% }); %>
+  </select>
+  <span style="font-size:12px;color:#6b7280;margin-left:auto;line-height:36px;" id="count"></span>
+</div>
 
-<!-- Per Model -->
-<div id="modelList"></div>
+<div id="list"></div>
 
 <script>
-var allModels = <%- JSON.stringify(models) %>;
-var currentCat = 'all';
+var DATA = <%= JSON.stringify(data) %>;
+var view = 'in';
 
-function filterCat(cat) {
-  currentCat = cat;
-  document.querySelectorAll('.cat-card').forEach(function(el) { el.classList.remove('active'); });
-  document.getElementById('cat-'+cat).classList.add('active');
-  renderModels();
-}
+function switchView(v) { view = v; document.getElementById('card-in').classList.toggle('active',v==='in'); document.getElementById('card-sold').classList.toggle('active',v==='sold'); render(); }
 
-function applyFilters() {
-  var os = document.querySelector('.cat-filter.active')?.id?.replace('mf-','') || 'all';
-  var st = document.getElementById('filterStorage').value;
-  var cl = document.getElementById('filterColor').value;
-  renderFiltered(os, st, cl);
-}
-function filterModel(os) { {
-  document.querySelectorAll('.cat-filter').forEach(function(el) { el.classList.remove('active'); });
-  document.getElementById('mf-'+os).classList.add('active');
-  renderModels(os);
-}
-
-function renderFiltered(osFilter, stFilter, clFilter) {
-  var osF = osFilter || 'all'; var stF = stFilter || 'all'; var clF = clFilter || 'all';
-  var html = '';
-  var keys = Object.keys(allModels).sort();
-  var shown = 0;
+function render() {
+  var os = document.getElementById('fOS').value;
+  var model = document.getElementById('fModel').value;
+  var storage = document.getElementById('fStorage').value;
+  var color = document.getElementById('fColor').value;
   
-  keys.forEach(function(k) {
-    var m = allModels[k];
-    var show = (osF === 'all' || 
-      (filter === 'iOS' && m.os === 'iOS') ||
-      (filter === 'Android' && m.os === 'Android') ||
-      (filter === 'Accessory' && m.type === 'Accessory');
-    
-    if (!show) return;
-    shown++;
-    
-    var val = currentCat === 'sold' ? m.sold : m.in;
-    var color = currentCat === 'sold' ? '#b91c1c' : (val > 0 ? '#15803d' : '#9ca3af');
-    
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fff;border:1px solid #f3f4f6;border-radius:10px;margin-bottom:4px;">';
-    html += '<div>';
-    html += '<span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:1px 6px;border-radius:4px;margin-right:6px;">' + (m.type||'-') + '</span>';
-    html += '<strong style="font-size:14px;">' + k + '</strong>';
-    if (m.color) html += ' <span style="font-size:12px;color:#9ca3af;">' + m.color + '</span>';
-    html += '</div>';
-    html += '<div style="text-align:right;">';
-    html += '<span style="font-size:20px;font-weight:800;color:' + color + ';">' + val + '</span>';
-    html += '<div style="font-size:11px;color:#6b7280;">&#8373;' + Number(m.price||0).toLocaleString() + '</div>';
-    html += '</div>';
-    html += '</div>';
+  var filtered = DATA.filter(function(d) {
+    if (os !== 'all' && d.os !== os) return false;
+    if (model !== 'all' && d.model !== model) return false;
+    if (storage !== 'all' && d.storage !== storage) return false;
+    if (color !== 'all' && d.color !== color) return false;
+    var val = view === 'sold' ? d.sold : d.in_stock;
+    return val > 0;
   });
   
-  if (shown === 0) {
-    html = '<div style="text-align:center;color:#999;padding:40px;">No items</div>';
-  }
+  var html = '';
+  var total = 0;
   
-  document.getElementById('modelList').innerHTML = html;
+  filtered.forEach(function(d) {
+    var val = view === 'sold' ? d.sold : d.in_stock;
+    total += val;
+    var vColor = view === 'sold' ? '#b91c1c' : '#15803d';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fff;border:1px solid #f3f4f6;border-radius:12px;margin-bottom:4px;">';
+    html += '<div>';
+    html += '<span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:4px;margin-right:8px;">' + d.type + '</span>';
+    html += '<strong>' + d.model + '</strong>';
+    html += ' <span style="font-size:12px;color:#9ca3af;">' + d.storage + ' ' + d.color + '</span>';
+    html += '</div>';
+    html += '<div style="text-align:right;">';
+    html += '<span style="font-size:22px;font-weight:800;color:' + vColor + ';">' + val + '</span>';
+    html += '<div style="font-size:11px;color:#6b7280;">GHS ' + Number(d.price).toLocaleString() + '</div>';
+    html += '</div></div>';
+  });
+  
+  document.getElementById('list').innerHTML = html || '<div style="text-align:center;color:#999;padding:40px;">No items match</div>';
+  document.getElementById('count').textContent = total + ' units | ' + filtered.length + ' variants';
 }
 
-renderModels('all');
-</script>
-
-<script>
-// Populate dropdowns from data
-(function() {
-  var stSet = new Set(), clSet = new Set();
-  Object.values(allModels).forEach(function(m) { if(m.storage) stSet.add(m.storage); if(m.color) clSet.add(m.color); });
-  var st = document.getElementById('filterStorage'), cl = document.getElementById('filterColor');
-  Array.from(stSet).sort().forEach(function(v) { st.innerHTML += '<option>'+v+'</option>'; });
-  Array.from(clSet).sort().forEach(function(v) { cl.innerHTML += '<option>'+v+'</option>'; });
-})();
-function filterModel(os) { document.querySelectorAll('.cat-filter').forEach(function(e){e.classList.remove('active')}); document.getElementById('mf-'+os).classList.add('active'); applyFilters(); }
-function applyFilters() { var os=document.querySelector('.cat-filter.active')?.id?.replace('mf-','')||'all'; var st=document.getElementById('filterStorage').value; var cl=document.getElementById('filterColor').value; renderFiltered(os,st,cl); }
+render();
 </script>
