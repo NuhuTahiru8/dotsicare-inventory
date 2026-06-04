@@ -75,6 +75,10 @@
 
     <!-- DEVICE SEARCH -->
     <label>
+      IMEI *
+      <input type="text" id="imeiSearch" placeholder="Type IMEI to find device (e.g. 1234)..." autocomplete="off" style="font-family:monospace;font-size:15px;" />
+      <span class="searchable-hint">Type IMEI - matching device will auto-fill. Or search below.</span>
+
       Device (In Stock) *
       <input type="hidden" name="device_id" id="deviceIdField" value="" />
       <div class="searchable-wrap">
@@ -178,11 +182,14 @@
 // ─── DEVICE SEARCH ───
 var allDevices = <%- JSON.stringify(devices.map(d => ({ id: d.id, model: d.model, storage: d.storage || "", color: d.color || "", imeis: d.imeis || "", condition: d.condition, sale_price: d.sale_price || 0 }))) %>;
 
+var imeiSearch = document.getElementById("imeiSearch");
 var deviceSearch = document.getElementById("deviceSearch");
 var deviceResults = document.getElementById("deviceResults");
 var deviceIdField = document.getElementById("deviceIdField");
 var highlightIdx = -1;
 var selectedDevicePrice = 0;
+
+imeiSearch.addEventListener("input", function () { var q = imeiSearch.value.trim().toLowerCase(); if (!q || q.length < 2) return; var found = allDevices.find(function (d) { return (d.imeis || "").toLowerCase().indexOf(q) !== -1; }); if (found) { selectDevice(found.id, found.model + " " + (found.storage||"") + " " + (found.color||"") + " " + (found.imeis||"")); imeiSearch.style.borderColor = "#22c55e"; } else { imeiSearch.style.borderColor = "#ef4444"; } });
 
 deviceSearch.addEventListener("input", function () {
   var q = deviceSearch.value.trim().toLowerCase();
