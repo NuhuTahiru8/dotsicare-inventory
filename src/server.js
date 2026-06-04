@@ -1386,6 +1386,43 @@ app.get("/reports/profit", requireAdmin, (req, res) => {
   res.render("reports/profit", { report, currency });
 });
 
+
+app.get("/inventory/summary", requireAuth, (req, res) => {
+  const items = db
+    .prepare(
+      
+    )
+    .all({ branch: req.branch });
+
+  var inStock = { total: 0, iOS: 0, Android: 0, Accessory: 0, byModel: {} };
+  var sold = { total: 0, iOS: 0, Android: 0, Accessory: 0, byModel: {} };
+  var stockModels = {};
+
+  items.forEach(function(d) {
+    var key = d.model + " " + (d.storage||"");
+    var isSold = d.status === "Sold";
+    var cat = d.product_type === "Accessory" ? "Accessory" : d.os || "Other";
+    
+    if (isSold) {
+      sold.total++;
+      if (cat === "iOS") sold.iOS++;
+      else if (cat === "Android") sold.Android++;
+      else sold.Accessory++;
+      if (!sold.byModel[key]) sold.byModel[key] = 0;
+      sold.byModel[key]++;
+    } else {
+      inStock.total++;
+      if (cat === "iOS") inStock.iOS++;
+      else if (cat === "Android") inStock.Android++;
+      else inStock.Accessory++;
+      if (!inStock.byModel[key]) inStock.byModel[key] = 0;
+      inStock.byModel[key]++;
+    }
+  });
+
+  res.render("inventory/summary", { inStock, sold, branch: getBranchName(req.branch) });
+});
+
 app.get("/inventory", requireAuth, (req, res) => {
   const items = db
     .prepare(

@@ -1,0 +1,97 @@
+<%- include("../partials/head", { title: "Stock Summary" }) %>
+<%- include("../partials/nav") %>
+
+<div style="max-width:900px;margin:0 auto;">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <div>
+      <h1 style="margin:0;">Stock Summary</h1>
+      <div class="muted"><%= branch %> branch</div>
+    </div>
+    <a class="btn btn-primary" href="/inventory">Back to Inventory</a>
+  </div>
+
+  <!-- In Stock Card -->
+  <div id="inStockCard" onclick="toggleSection('inStockDetail')" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #22c55e;border-radius:16px;padding:24px;margin-bottom:12px;cursor:pointer;transition:all .2s;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:12px;color:#16a34a;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Available Stock</div>
+        <div style="font-size:42px;font-weight:800;color:#15803d;"><%= inStock.total %></div>
+      </div>
+      <div style="font-size:24px;color:#16a34a;">&#9660;</div>
+    </div>
+  </div>
+
+  <div id="inStockDetail" style="display:none;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px;">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+      <div style="text-align:center;padding:16px;background:#f0fdf4;border-radius:10px;">
+        <div style="font-size:28px;font-weight:800;color:#15803d;"><%= inStock.iOS %></div>
+        <div style="font-size:13px;color:#16a34a;font-weight:600;">iOS</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:#f0fdf4;border-radius:10px;">
+        <div style="font-size:28px;font-weight:800;color:#15803d;"><%= inStock.Android %></div>
+        <div style="font-size:13px;color:#16a34a;font-weight:600;">Android</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:#f0fdf4;border-radius:10px;">
+        <div style="font-size:28px;font-weight:800;color:#15803d;"><%= inStock.Accessory %></div>
+        <div style="font-size:13px;color:#16a34a;font-weight:600;">Accessories</div>
+      </div>
+    </div>
+    <h3 style="font-size:15px;color:#333;margin-bottom:8px;">Per Model</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
+      <% Object.keys(inStock.byModel).sort().forEach(function(k) { %>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;">
+          <span style="font-weight:600;"><%= k %></span>
+          <span style="font-weight:800;color:#0f2d62;"><%= inStock.byModel[k] %></span>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+
+  <!-- Sold Card -->
+  <div id="soldCard" onclick="toggleSection('soldDetail')" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:2px solid #ef4444;border-radius:16px;padding:24px;margin-bottom:20px;cursor:pointer;transition:all .2s;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:12px;color:#dc2626;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Sold</div>
+        <div style="font-size:42px;font-weight:800;color:#b91c1c;"><%= sold.total %></div>
+      </div>
+      <div style="font-size:24px;color:#dc2626;">&#9660;</div>
+    </div>
+  </div>
+
+  <div id="soldDetail" style="display:none;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+      <div style="text-align:center;padding:16px;background:#fef2f2;border-radius:10px;">
+        <div style="font-size:28px;font-weight:800;color:#b91c1c;"><%= sold.iOS %></div>
+        <div style="font-size:13px;color:#dc2626;font-weight:600;">iOS</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:#fef2f2;border-radius:10px;">
+        <div style="font-size:28px;font-weight:800;color:#b91c1c;"><%= sold.Android %></div>
+        <div style="font-size:13px;color:#dc2626;font-weight:600;">Android</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:#fef2f2;border-radius:10px;">
+        <div style="font-size:28px;font-weight:800;color:#b91c1c;"><%= sold.Accessory %></div>
+        <div style="font-size:13px;color:#dc2626;font-weight:600;">Accessories</div>
+      </div>
+    </div>
+    <h3 style="font-size:15px;color:#333;margin-bottom:8px;">Per Model</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
+      <% Object.keys(sold.byModel).sort().forEach(function(k) { %>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;">
+          <span style="font-weight:600;"><%= k %></span>
+          <span style="font-weight:800;color:#dc2626;"><%= sold.byModel[k] %></span>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleSection(id) {
+  var el = document.getElementById(id);
+  el.style.display = el.style.display === "none" ? "block" : "none";
+}
+// Open inStock by default
+document.getElementById("inStockDetail").style.display = "block";
+</script>
