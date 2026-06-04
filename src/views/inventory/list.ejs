@@ -6,19 +6,14 @@
   <a class="btn btn-primary" href="/inventory/new">+ Add Stock</a>
 </div>
 
-<!-- Stock Summary Cards -->
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:24px;">
+<!-- Stock Summary -->
   <%
     var stockByModel = {};
-    var soldByModel = {};
     var totalInStock = 0;
     var totalSold = 0;
     items.forEach(function(d) {
-      var key = d.model + " " + (d.storage||"") + " " + (d.color||"");
-      var count = d.status === "Sold" ? 0 : 1;
+      var key = d.model + " " + (d.storage||"");
       if (d.status === "Sold") {
-        if (!soldByModel[key]) soldByModel[key] = 0;
-        soldByModel[key]++;
         totalSold++;
       } else {
         if (!stockByModel[key]) stockByModel[key] = 0;
@@ -26,23 +21,47 @@
         totalInStock++;
       }
     });
+    var modelKeys = Object.keys(stockByModel).sort();
   %>
-  <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:12px;padding:16px;text-align:center;">
-    <div style="font-size:32px;font-weight:800;color:#0369a1;"><%= totalInStock %></div>
-    <div style="font-size:13px;color:#0369a1;">In Stock</div>
-  </div>
-  <div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fecaca;border-radius:12px;padding:16px;text-align:center;">
-    <div style="font-size:32px;font-weight:800;color:#dc2626;"><%= totalSold %></div>
-    <div style="font-size:13px;color:#dc2626;">Sold</div>
-  </div>
-  <% Object.keys(stockByModel).sort().forEach(function(k) { %>
-    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;">
-      <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:2px;"><%= k %></div>
-      <div style="font-size:20px;font-weight:800;color:#0f2d62;"><%= stockByModel[k] %></div>
-      <div style="font-size:11px;color:#6b7280;">available</div>
+  <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px 20px;text-align:center;">
+      <div style="font-size:28px;font-weight:800;color:#0369a1;"><%= totalInStock %></div>
+      <div style="font-size:12px;color:#0369a1;">In Stock</div>
     </div>
-  <% }); %>
-</div>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 20px;text-align:center;">
+      <div style="font-size:28px;font-weight:800;color:#dc2626;"><%= totalSold %></div>
+      <div style="font-size:12px;color:#dc2626;">Sold</div>
+    </div>
+    <button id="toggleModelBtn" onclick="toggleModelBreakdown()" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;">
+      Total Per Model (<%= modelKeys.length %>)
+    </button>
+  </div>
+
+  <div id="modelBreakdown" style="display:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:20px;padding:16px;background:#f8fafc;border-radius:12px;border:1px solid #e5e7eb;">
+    <% modelKeys.forEach(function(k) { %>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#fff;border-radius:8px;border:1px solid #e5e7eb;">
+        <span style="font-size:13px;font-weight:600;"><%= k %></span>
+        <span style="font-size:16px;font-weight:800;color:var(--primary);"><%= stockByModel[k] %></span>
+      </div>
+    <% }); %>
+    <% if (modelKeys.length === 0) { %>
+      <div style="text-align:center;color:#999;grid-column:1/-1;">No stock data</div>
+    <% } %>
+  </div>
+
+  <script>
+    function toggleModelBreakdown() {
+      var el = document.getElementById("modelBreakdown");
+      var btn = document.getElementById("toggleModelBtn");
+      if (el.style.display === "none" || el.style.display === "") {
+        el.style.display = "grid";
+        btn.textContent = "Hide Breakdown";
+      } else {
+        el.style.display = "none";
+        btn.textContent = "Total Per Model (<%= modelKeys.length %>)";
+      }
+    }
+  </script>
 
 <!-- In Stock Table -->
 <h2 style="color:#22c55e;margin-bottom:8px;">In Stock</h2>
