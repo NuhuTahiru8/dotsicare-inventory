@@ -1016,6 +1016,26 @@ function updateDeviceFromBody(id, branch, body) {
 }
 
 app.get("/dashboard", requireAuth, (req, res) => {
+  var stockCounts = db.prepare(
+    "SELECT product_type, os, COUNT(*) as cnt FROM devices WHERE branch = @branch AND status = 'InStock' GROUP BY product_type, os"
+  ).all({ branch: req.branch });
+  
+  var inStock = { total: 0, iOS: 0, Android: 0, Accessory: 0 };
+  var sold = db.prepare(
+    "SELECT COUNT(*) as cnt FROM devices WHERE branch = @branch AND status = 'Sold'"
+  ).get({ branch: req.branch })?.cnt || 0;
+  
+  stockCounts.forEach(function(r) {
+    var cat = r.product_type === 'Accessory' ? 'Accessory' : (r.os || 'Other');
+    if (cat === 'iOS') inStock.iOS += r.cnt;
+    else if (cat === 'Android') inStock.Android += r.cnt;
+    else inStock.Accessory += r.cnt;
+    inStock.total += r.cnt;
+  });
+  
+  var lastSale = db.prepare(
+    "SELECT s.*, d.model, d.storage, c.name as customer_name FROM sales s LEFT JOIN devices d ON s.device_id = d.id LEFT JOIN customers c ON s.customer_id = c.id WHERE s.branch = @branch ORDER BY s.id DESC LIMIT 5"
+  ).all({ branch: req.branch });
   if (!hasAnyUsers()) return res.redirect("/setup");
   const dashboard = getBranchDashboard(req.branch);
 
@@ -1031,7 +1051,7 @@ app.get("/dashboard", requireAuth, (req, res) => {
     )
     .get({ branch: req.branch, today: todayIsoDate() }).c;
 
-  res.render("home", { counts: dashboard, dashboard, overdueCount, currency });
+  res.render("home", { inStock, soldCount: sold, lastSales: lastSale || [], counts: dashboard, dashboard, overdueCount, currency });
 });
 
 app.get("/admin", requireAdmin, (req, res) => {
