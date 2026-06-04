@@ -2107,6 +2107,11 @@ function substrDate(iso) {
   return (iso || "").slice(0, 10);
 }
 
+app.get("/credits", requireAdmin, (req, res) => {
+  const smsCredits = db.prepare("SELECT sms_credits FROM users WHERE id = @id").get({ id: req.user.id })?.sms_credits || 0;
+  res.render("credits", { smsCredits });
+});
+
 app.get("/sms", requireAdmin, (req, res) => {
   const templates = db.prepare(`SELECT * FROM message_templates WHERE branch = @branch AND active = 1 ORDER BY id DESC`).all({ branch: req.branch });
   const filter = (req.query.filter || "overdue").toString();
@@ -2114,7 +2119,8 @@ app.get("/sms", requireAdmin, (req, res) => {
   const selectedTemplateId = req.query.template_id ? Number(req.query.template_id) : null;
   const selectedTemplate = selectedTemplateId ? templates.find((t) => t.id === selectedTemplateId) : null;
   const message = selectedTemplate ? selectedTemplate.body : "";
-  res.render("sms/center", { templates, recipients, filter, senderId: getSenderId(), error: null, selectedTemplateId, message });
+  const smsCredits = db.prepare("SELECT sms_credits FROM users WHERE id = @id").get({ id: req.user.id })?.sms_credits || 0;
+  res.render("sms/center", { templates, recipients, filter, senderId: getSenderId(), error: null, selectedTemplateId, message, smsCredits });
 });
 
 function getRecipientsByFilter(filter, branch) {
@@ -2199,6 +2205,18 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
     });
   }
 
+  // Check SMS credits
+  const user = db.prepare("SELECT sms_credits FROM users WHERE id = @id").get({ id: req.user.id });
+  const availableCredits = user ? (user.sms_credits || 0) : 0;
+  const neededCredits = selected.length + pasteNumbers.length;
+  if (availableCredits < neededCredits) {
+    return res.status(400).render("sms/center", {
+      templates, recipients, filter, senderId: getSenderId(),
+      error: "Insufficient SMS credits. You have " + availableCredits + " but need " + neededCredits + ". Buy more credits.",
+      selectedTemplateId: templateId, message: body, smsCredits: availableCredits
+    });
+  }
+
   let queuedIds = [];
   const tx = db.transaction(() => {
     let savedTemplateId = templateId;
@@ -2251,6 +2269,11 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
   tx();
   if (queuedIds.length > 0) {
     await deliverBulkMessages(queuedIds);
+  }
+  // Deduct credits
+  if (queuedIds.length > 0) {
+    db.prepare("UPDATE users SET sms_credits = MAX(0, sms_credits - @used) WHERE id = @id")
+      .run({ used: queuedIds.length, id: req.user.id });
   }
   res.redirect("/sms/logs?sent=" + queuedIds.length);
 });

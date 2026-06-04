@@ -1,0 +1,24 @@
+<%- include("../partials/head", { title: "Buy SMS Credits" }) %>
+<%- include("../partials/nav") %>
+
+<div style="max-width:600px;margin:40px auto;padding:20px;">
+  <h1>Buy SMS Credits</h1>
+  <p style="color:#666;margin-bottom:24px;">Top up your account to continue sending SMS.</p>
+
+  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:20px;margin-bottom:24px;text-align:center;">
+    <div style="font-size:14px;color:#0369a1;margin-bottom:4px;">Current Balance</div>
+    <div style="font-size:32px;font-weight:bold;color:#0369a1;"><%= locals.smsCredits || 0 %> SMS</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <a href="https://sms.ayisun.com/index.html?mode=subscription" target="_blank" style="background:#2563eb;color:#fff;padding:16px;border-radius:12px;text-align:center;text-decoration:none;font-size:16px;font-weight:600;grid-column:1/-1;">
+      Buy Credits on Ayisun SMS
+    </a>
+  </div>
+
+  <div style="margin-top:24px;padding:16px;background:#fefce8;border:1px solid #fef08a;border-radius:8px;font-size:13px;color:#854d0e;">
+    <strong>How it works:</strong> Buy credits on our SMS platform (Ayisun). Credits are shared across all your services.
+  </div>
+</div>
+
+<%- include("../partials/foot") %>
