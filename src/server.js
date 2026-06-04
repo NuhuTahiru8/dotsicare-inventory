@@ -1470,6 +1470,14 @@ app.get("/inventory", requireAuth, (req, res) => {
   });
 });
 
+
+app.get("/api/stock-lookup", requireAuth, (req, res) => {
+  var q = String(req.query.q || "").trim().toLowerCase();
+  if (!q) return res.json([]);
+  var rows = db.prepare("SELECT model, storage, color, COUNT(*) as count FROM devices WHERE branch = @branch AND status = 'InStock' AND lower(model) = @q GROUP BY model, storage, color").all({ branch: req.branch, q: q });
+  res.json(rows);
+});
+
 app.get("/inventory/new", requireAdmin, (req, res) => {
   res.render("inventory/new", {
     error: null,
