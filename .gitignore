@@ -1,1 +1,7 @@
 node_modules/
+data/
+*.sqlite
+*.db
+fix.txt
+ghost-test.mjs
+*.log
