@@ -1,0 +1,42 @@
+<%- include("../partials/head", { title: "Add Accessory" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <div>
+    <h1>Add Accessory</h1>
+    <% if (currentBranch) { %>
+      <div class="muted">Adding to <%= currentBranch.name %></div>
+    <% } %>
+  </div>
+  <a class="btn secondary" href="/inventory">Back</a>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<div style="max-width:500px;">
+  <form class="form" method="post" action="/inventory/accessory/new">
+    <div class="grid">
+      <label>
+        Name *
+        <input name="model" required placeholder="e.g. Phone Case, Charger, Screen Protector" value="<%= (form && form.model) || '' %>" />
+      </label>
+      <label>
+        Cost Price (&#8373;) *
+        <input name="cost_price" type="number" min="0" step="0.01" required placeholder="0" value="<%= (form && form.cost_price) || '' %>" />
+      </label>
+      <label>
+        Selling Price (&#8373;) *
+        <input name="sale_price" type="number" min="0" step="0.01" required placeholder="0" value="<%= (form && form.sale_price) || '' %>" />
+      </label>
+      <label>
+        Quantity
+        <input name="quantity" type="number" min="1" max="100" value="<%= (form && form.quantity) || 1 %>" />
+      </label>
+    </div>
+    <button class="btn" type="submit" style="background:#8b5cf6;border-color:#7c3aed;margin-top:12px;">Save Accessory</button>
+  </form>
+</div>
+
+<%- include("../partials/foot") %>

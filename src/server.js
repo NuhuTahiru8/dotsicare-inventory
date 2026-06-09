@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import multer from "multer";
 import { db, moneyToInt, nowIso } from "./db.js";
-import { enqueueSms, deliverSmsMessage, deliverBulkMessages, getSenderId } from "./sms.js";
+import { enqueueSms, deliverSmsMessage, deliverBulkMessages, getSenderId, getAyisunDoticareCredits, deductAyisunDoticareCredits, addAyisunDoticareCredits } from "./sms.js";
 // import https from "node:https"; // not needed
 
 const app = express();
@@ -35,6 +35,7 @@ const upload = multer({
   }
 });
 
+const lowStockThreshold = Number(process.env.LOW_STOCK_THRESHOLD) || 3;
 const sessionSecret = (process.env.SESSION_SECRET || "dev-secret-change-me").toString();
 const branches = Object.freeze([
   { key: "Konongo", name: "Konongo" },
@@ -282,25 +283,13 @@ function clearSessionCookie(res) {
   res.setHeader("Set-Cookie", "dotsicare_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
 }
 
-function scryptHash(password, salt) {
-  return crypto.scryptSync(password, salt, 64).toString("hex");
-}
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  return {
-    password_salt: salt,
-    password_hash: scryptHash(password, salt)
-  };
-}
-
 function findUserById(id) {
   return db.prepare(`SELECT id, name, role FROM users WHERE id = @id`).get({ id });
 }
 
 function findUserForLogin(name) {
   return db
-    .prepare(`SELECT id, name, role, password_salt, password_hash FROM users WHERE lower(name) = lower(@name)`)
+    .prepare(`SELECT id, name, role, branch, password FROM users WHERE lower(name) = lower(@name)`)
     .get({ name });
 }
 
@@ -361,6 +350,21 @@ app.use((req, res, next) => {
   res.locals.siteName = "DOT'S iCARE";
   res.locals.defaultSeoDescription = storeSeoDescription;
   res.locals.jsonAttr = (value) => encodeURIComponent(JSON.stringify(value || []));
+  res.locals.pendingCreditRequests = (req.user && req.user.role === 'Admin')
+    ? db.prepare("SELECT COUNT(*) as cnt FROM credit_requests WHERE status = 'pending'").get().cnt
+    : 0;
+
+  // Birthday count for nav badge
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  const bdayMonth = monthNames[now.getMonth()];
+  const bdayDay = now.getDate();
+  res.locals.birthdayCount = db.prepare(
+    `SELECT COUNT(*) as cnt FROM customers
+     WHERE branch = @branch
+       AND birth_month = @todayMonth
+       AND birth_day = @todayDay`
+  ).get({ branch: req.branch, todayMonth: bdayMonth, todayDay: bdayDay }).cnt;
   next();
 });
 
@@ -397,7 +401,7 @@ function hasAnyUsers() {
 function getAdminUsers() {
   return db
     .prepare(
-      `SELECT u.id, u.name, u.role, u.created_at, COUNT(s.id) AS sale_count
+      `SELECT u.id, u.name, u.role, u.branch, u.created_at, COUNT(s.id) AS sale_count
        FROM users u
        LEFT JOIN sales s ON s.created_by_user_id = u.id
        GROUP BY u.id
@@ -406,9 +410,9 @@ function getAdminUsers() {
     .all();
 }
 
-function renderAdminUsers(res, { status = 200, error = null, message = null } = {}) {
+function renderAdminUsers(res, { status = 200, error = null, message = null, form = null } = {}) {
   const users = getAdminUsers();
-  return res.status(status).render("admin/users", { users, error, message });
+  return res.status(status).render("admin/users", { users, error, message, form });
 }
 
 function normalizeStockBatchName(value) {
@@ -485,7 +489,7 @@ function getBranchDashboard(branch) {
        FROM sales s
        JOIN devices d ON d.id = s.device_id
        LEFT JOIN trade_ins ti ON ti.sale_id = s.id
-       WHERE s.branch = @branch`
+       WHERE s.branch = @branch AND s.is_returned = 0`
     )
     .get({ branch });
 
@@ -726,12 +730,10 @@ app.post("/setup", (req, res) => {
     return res.status(400).render("auth/setup", { error: "Enter a username and password (6+ characters)." });
   }
 
-  const { password_salt, password_hash } = hashPassword(password);
-
   db.prepare(
-    `INSERT INTO users (name, role, password_salt, password_hash, created_at)
-     VALUES (@name, 'Admin', @password_salt, @password_hash, @created_at)`
-  ).run({ name, password_salt, password_hash, created_at: nowIso() });
+    `INSERT INTO users (name, role, password, created_at)
+     VALUES (@name, 'Admin', @password, @created_at)`
+  ).run({ name, password, created_at: nowIso() });
 
   res.redirect("/login");
 });
@@ -749,25 +751,43 @@ app.post("/login", (req, res) => {
 
   const name = (req.body.name || "").toString().trim();
   const password = (req.body.password || "").toString();
-  const branch = normalizeBranch(req.body.branch);
-  if (!branch) {
-    return renderLogin(res.status(400), { error: "Pick a shop.", selectedBranch: req.body.branch });
-  }
 
   const user = findUserForLogin(name);
-  if (!user || !user.password_salt || !user.password_hash) {
-    return renderLogin(res.status(401), { error: "Invalid login.", selectedBranch: branch });
+  if (!user || !user.password) {
+    const branch = normalizeBranch(req.body.branch);
+    return renderLogin(res.status(401), { error: "Invalid login.", selectedBranch: branch || undefined });
   }
 
-  const hash = scryptHash(password, user.password_salt);
-  const ok = crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(user.password_hash));
-  if (!ok) return renderLogin(res.status(401), { error: "Invalid login.", selectedBranch: branch });
+  const ok = password === user.password;
+  if (!ok) {
+    const branch = normalizeBranch(req.body.branch);
+    return renderLogin(res.status(401), { error: "Invalid login.", selectedBranch: branch || undefined });
+  }
+
+  // Employees are locked to their assigned branch; admins pick from the form
+  var branch;
+  if (user.role === "Employee") {
+    branch = normalizeBranch(user.branch);
+    if (!branch) {
+      return renderLogin(res.status(400), { error: "Your account has no branch assigned. Ask an admin.", selectedBranch: undefined });
+    }
+  } else {
+    branch = normalizeBranch(req.body.branch);
+    if (!branch) {
+      return renderLogin(res.status(400), { error: "Pick a shop.", selectedBranch: req.body.branch });
+    }
+  }
 
   setSessionCookie(res, { userId: user.id, branch, exp: Date.now() + 1000 * 60 * 60 * 12 });
   return res.redirect(user.role === "Admin" ? "/admin" : "/sales");
 });
 
 app.post("/branch", requireAuth, (req, res) => {
+  // Employees cannot switch branches — locked to their assigned shop
+  if (req.user.role === "Employee") {
+    return res.status(403).send("Your branch is locked. Contact an admin to change it.");
+  }
+
   const branch = normalizeBranch(req.body.branch);
   if (branch) setSessionCookie(res, sessionPayload(req, branch));
   // Redirect back to same page, or dashboard as fallback
@@ -907,28 +927,148 @@ app.get("/sitemap.xml", (req, res) => {
   res.type("application/xml").send(xml);
 });
 
+function normalizeModel(model) {
+  if (!model) return model;
+  var m = model.trim();
+  var lower = m.toLowerCase();
+  // Step 1: Fix brand prefix
+  var brands = [
+    ['iphone', 'iPhone'],
+    ['ipad', 'iPad'],
+    ['macbook', 'MacBook'],
+    ['samsung galaxy', 'Samsung Galaxy'],
+    ['samsung', 'Samsung'],
+    ['google pixel', 'Google Pixel'],
+    ['oneplus', 'OnePlus'],
+    ['xiaomi', 'Xiaomi'],
+    ['oppo', 'Oppo'],
+    ['vivo', 'Vivo'],
+    ['realme', 'Realme'],
+    ['tecno', 'Tecno'],
+    ['infinix', 'Infinix'],
+    ['nokia', 'Nokia'],
+    ['huawei', 'Huawei'],
+    ['honor', 'Honor'],
+    ['motorola', 'Motorola'],
+    ['sony', 'Sony'],
+    ['htc', 'HTC']
+  ];
+  for (var i = 0; i < brands.length; i++) {
+    if (lower.startsWith(brands[i][0])) {
+      m = brands[i][1] + m.slice(brands[i][0].length);
+      break;
+    }
+  }
+  // Step 2: Fix model suffixes (Pro Max, Plus, Ultra, FE, Lite, Mini, SE, etc.)
+  var suffixFixes = [
+    [/\bpro max\b/gi, 'Pro Max'],
+    [/\bpro plus\b/gi, 'Pro Plus'],
+    [/\bpro\b/g, 'Pro'],
+    [/\bplus\b/gi, 'Plus'],
+    [/\bultra\b/gi, 'Ultra'],
+    [/\bfe\b/g, 'FE'],
+    [/\blite\b/gi, 'Lite'],
+    [/\bmini\b/gi, 'Mini'],
+    [/\bmax\b/gi, 'Max'],
+    [/\bse\b/gi, 'SE'],
+    [/\bz fold\b/gi, 'Z Fold'],
+    [/\bz flip\b/gi, 'Z Flip'],
+    [/\bs(\d+)\b/gi, 'S$1'],
+    [/\ba(\d+)\b/gi, 'A$1'],
+    [/\bz(\d+)\b/gi, 'Z$1'],
+    [/\bm(\d+)\b/gi, 'M$1'],
+    [/\bp(\d+)\b/gi, 'P$1']
+  ];
+  for (var j = 0; j < suffixFixes.length; j++) {
+    m = m.replace(suffixFixes[j][0], suffixFixes[j][1]);
+  }
+  return m;
+}
+
+function normalizeStorage(storage) {
+  if (!storage) return storage;
+  var s = storage.toString().trim();
+  // Already has GB/TB suffix → just uppercase it
+  if (/^\d+\s*(GB|TB|gb|tb)$/i.test(s)) {
+    return s.replace(/\s*(gb|tb)$/i, function(_, unit) { return unit.toUpperCase(); });
+  }
+  // Bare number → append GB
+  if (/^\d+$/.test(s)) {
+    return s + 'GB';
+  }
+  return s;
+}
+
 function insertDeviceFromBody(body) {
   const branch = normalizeBranch(body.branch);
-  const { model, storage, color, condition, cost_price, sale_price, imei1, imei2, stock_batch_name } = body;
+  var { model, storage, color, condition, cost_price, sale_price, imei1, imei2, stock_batch_name, product_type, os } = body;
+  model = product_type === "Accessory" ? (model || "").toString().trim() : normalizeModel(model);
+  model = model || null;
+  storage = product_type === "Accessory" ? (storage || null) : normalizeStorage(storage);
   const cost = moneyToInt(cost_price);
-  if (cost < 0 || sale < 0) return { ok: false, error: "Price cannot be negative" };
   const sale = moneyToInt(sale_price);
-  const imeis = [imei1, imei2].map((v) => (v || "").trim()).filter(Boolean);
+  if (cost < 0 || sale < 0) return { ok: false, error: "Price cannot be negative" };
+  let imeis = [imei1, imei2].map((v) => (v || "").trim()).filter(Boolean);
+  // Auto-detect OS from model name when not explicitly provided
+  var detectedOs = os || null;
+  var detectedType = product_type || "Phone";
+  var isAccessory = detectedType === "Accessory";
+  if (!isAccessory && !detectedOs && model) {
+    var m = model.toString().toLowerCase();
+    if (m.includes("iphone") || m.includes("ipad") || m.includes("macbook") || m.includes("apple") ||
+        m === "se" || m === "se2" || m === "se3") {
+      detectedOs = "iOS";
+    } else if (m.includes("samsung") || m.includes("galaxy") || m.includes("google pixel") ||
+               m.includes("oneplus") || m.includes("xiaomi") || m.includes("oppo") ||
+               m.includes("vivo") || m.includes("realme") || m.includes("tecno") ||
+               m.includes("infinix") || m.includes("nokia") || m.includes("huawei") ||
+               m.includes("honor") || m.includes("motorola") || m.includes("sony") ||
+               m.includes("lg ") || m.includes("htc") || m.includes("android")) {
+      detectedOs = "Android";
+    }
+  }
 
   if (!branch) {
     return { ok: false, error: "Pick a shop first." };
   }
 
-  if (!model || !condition || cost == null || sale == null || imeis.length === 0) {
-    return { ok: false, error: "Model, condition, cost, price and IMEI are required." };
+  if (isAccessory) {
+    // Accessories: model name + prices only — no IMEI or condition required
+    condition = condition || "New";
+    detectedOs = null;
+    if (!model || cost == null || sale == null) {
+      return { ok: false, error: "Accessory name, cost, and selling price are required." };
+    }
+  } else {
+    if (!model || !condition || cost == null || sale == null || imeis.length === 0) {
+      return { ok: false, error: "Model, condition, cost, price and IMEI are required." };
+    }
+  }
+
+  // Skip IMEIs that already exist in the system to avoid UNIQUE constraint crash
+  if (!isAccessory && imeis.length > 0) {
+    var dupImeis = [];
+    var freshImeis = [];
+    for (var di = 0; di < imeis.length; di++) {
+      var existing = db.prepare('SELECT imei FROM device_imeis WHERE imei = ?').get(imeis[di]);
+      if (existing) {
+        dupImeis.push(imeis[di]);
+      } else {
+        freshImeis.push(imeis[di]);
+      }
+    }
+    if (freshImeis.length === 0) {
+      return { ok: false, error: 'IMEI already in stock: ' + dupImeis.join(', ') };
+    }
+    imeis = freshImeis;
   }
 
   const tx = db.transaction(() => {
     const stockBatchId = findOrCreateStockBatch(branch, stock_batch_name, "Created from stock entry");
     const ins = db
       .prepare(
-        `INSERT INTO devices (branch, stock_batch_id, model, storage, color, condition, cost_price, sale_price, status, created_by_user_id, created_at)
-         VALUES (@branch, @stock_batch_id, @model, @storage, @color, @condition, @cost_price, @sale_price, 'InStock', @created_by_user_id, @created_at)`
+        `INSERT INTO devices (branch, stock_batch_id, model, storage, color, condition, cost_price, sale_price, status, created_by_user_id, created_at, product_type, os)
+         VALUES (@branch, @stock_batch_id, @model, @storage, @color, @condition, @cost_price, @sale_price, 'InStock', @created_by_user_id, @created_at, @product_type, @os)`
       )
       .run({
         branch,
@@ -939,6 +1079,8 @@ function insertDeviceFromBody(body) {
         condition,
         cost_price: cost,
         sale_price: sale,
+        product_type: detectedType,
+        os: detectedOs,
         created_by_user_id: body.created_by_user_id || null,
         created_at: nowIso()
       });
@@ -972,14 +1114,44 @@ function getDeviceWithImeis(id, branch) {
 }
 
 function updateDeviceFromBody(id, branch, body) {
-  const { model, storage, color, condition, cost_price, sale_price, imei1, imei2, stock_batch_name } = body;
+  var { model, storage, color, condition, cost_price, sale_price, imei1, imei2, stock_batch_name, product_type, os } = body;
+  var isAccessory = (product_type || "").toString() === "Accessory";
+  model = isAccessory ? (model || "").toString().trim() : normalizeModel(model);
+  model = model || null;
+  storage = isAccessory ? (storage || null) : normalizeStorage(storage);
   const cost = moneyToInt(cost_price);
-  if (cost < 0 || sale < 0) return { ok: false, error: "Price cannot be negative" };
   const sale = moneyToInt(sale_price);
+  if (cost < 0 || sale < 0) return { ok: false, error: "Price cannot be negative" };
   const imeis = [imei1, imei2].map((v) => (v || "").trim()).filter(Boolean);
 
-  if (!model || !condition || cost == null || sale == null || imeis.length === 0) {
-    return { ok: false, error: "Model, condition, cost, price and IMEI are required." };
+  // Auto-detect OS from model name when not explicitly provided
+  var detectedOs = os || null;
+  var detectedType = product_type || "Phone";
+  if (!isAccessory && !detectedOs && model) {
+    var m = model.toString().toLowerCase();
+    if (m.includes("iphone") || m.includes("ipad") || m.includes("macbook") || m.includes("apple") ||
+        m === "se" || m === "se2" || m === "se3") {
+      detectedOs = "iOS";
+    } else if (m.includes("samsung") || m.includes("galaxy") || m.includes("google pixel") ||
+               m.includes("oneplus") || m.includes("xiaomi") || m.includes("oppo") ||
+               m.includes("vivo") || m.includes("realme") || m.includes("tecno") ||
+               m.includes("infinix") || m.includes("nokia") || m.includes("huawei") ||
+               m.includes("honor") || m.includes("motorola") || m.includes("sony") ||
+               m.includes("lg ") || m.includes("htc") || m.includes("android")) {
+      detectedOs = "Android";
+    }
+  }
+
+  if (isAccessory) {
+    condition = condition || "New";
+    detectedOs = null;
+    if (!model || cost == null || sale == null) {
+      return { ok: false, error: "Accessory name, cost, and selling price are required." };
+    }
+  } else {
+    if (!model || !condition || cost == null || sale == null || imeis.length === 0) {
+      return { ok: false, error: "Model, condition, cost, price and IMEI are required." };
+    }
   }
 
   const existing = getDeviceWithImeis(id, branch);
@@ -995,7 +1167,9 @@ function updateDeviceFromBody(id, branch, body) {
            color = @color,
            condition = @condition,
            cost_price = @cost_price,
-           sale_price = @sale_price
+           sale_price = @sale_price,
+           product_type = @product_type,
+           os = @os
        WHERE id = @id AND branch = @branch`
     ).run({
       id,
@@ -1006,7 +1180,9 @@ function updateDeviceFromBody(id, branch, body) {
       color: color || null,
       condition,
       cost_price: cost,
-      sale_price: sale
+      sale_price: sale,
+      product_type: detectedType,
+      os: detectedOs
     });
 
     db.prepare(`DELETE FROM device_imeis WHERE device_id = @device_id`).run({ device_id: id });
@@ -1024,7 +1200,7 @@ function updateDeviceFromBody(id, branch, body) {
   }
 }
 
-app.get("/dashboard", requireAuth, (req, res) => {
+app.get("/dashboard", requireAdmin, (req, res) => {
   var stockCounts = db.prepare(
     "SELECT product_type, os, COUNT(*) as cnt FROM devices WHERE branch = @branch AND status = 'InStock' GROUP BY product_type, os"
   ).all({ branch: req.branch });
@@ -1035,10 +1211,10 @@ app.get("/dashboard", requireAuth, (req, res) => {
   ).get({ branch: req.branch })?.cnt || 0;
   
   stockCounts.forEach(function(r) {
-    var cat = r.product_type === 'Accessory' ? 'Accessory' : (r.os || 'Other');
+    var cat = r.product_type === 'Accessory' ? 'Accessory' : r.os === 'iOS' ? 'iOS' : r.os === 'Android' ? 'Android' : 'Other';
     if (cat === 'iOS') inStock.iOS += r.cnt;
     else if (cat === 'Android') inStock.Android += r.cnt;
-    else inStock.Accessory += r.cnt;
+    else if (cat === 'Accessory') inStock.Accessory += r.cnt;
     inStock.total += r.cnt;
   });
   
@@ -1060,7 +1236,70 @@ app.get("/dashboard", requireAuth, (req, res) => {
     )
     .get({ branch: req.branch, today: todayIsoDate() }).c;
 
-  res.render("home", { inStock, soldCount: sold, lastSales: lastSale || [], counts: dashboard, dashboard, overdueCount, currency });
+  var todayDate = todayIsoDate();
+  var todaySales = db.prepare(
+    `SELECT s.*, d.model, d.storage, c.name as customer_name
+     FROM sales s
+     LEFT JOIN devices d ON s.device_id = d.id
+     LEFT JOIN customers c ON s.customer_id = c.id
+     WHERE s.branch = @branch AND substr(s.created_at, 1, 10) = @today
+     ORDER BY s.id DESC`
+  ).all({ branch: req.branch, today: todayDate });
+
+  var todayCount = todaySales.length;
+  var todayRevenue = todaySales.reduce(function(sum, s) {
+    return sum + Math.max(0, (s.sale_price || 0) - (s.discount || 0));
+  }, 0);
+
+  const pendingCreditRequests = db.prepare("SELECT COUNT(*) as cnt FROM credit_requests WHERE status = 'pending'").get().cnt;
+
+  // Birthday alert — customers with birthday today
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  const todayMonth = monthNames[now.getMonth()];
+  const todayDay = now.getDate();
+  const birthdayCustomers = db.prepare(
+    `SELECT id, name, phone, birth_day, birth_month FROM customers
+     WHERE branch = @branch
+       AND birth_month = @todayMonth
+       AND birth_day = @todayDay`
+  ).all({ branch: req.branch, todayMonth, todayDay });
+
+  res.render("home", { inStock, soldCount: sold, lastSales: lastSale || [], counts: dashboard, dashboard, overdueCount, todaySales, todayCount, todayRevenue, todayDate, currency, lowStockThreshold, pendingCreditRequests, birthdayCustomers });
+});
+
+// ─── DASHBOARD API: per-model breakdown ───
+app.get("/api/dashboard/models", requireAuth, (req, res) => {
+  var status = (req.query.status || "InStock").toString();
+  var type = (req.query.type || "").toString();
+
+  if (!["InStock", "Sold"].includes(status)) status = "InStock";
+
+  var sql = "SELECT d.model, d.product_type, d.os, COUNT(*) as cnt FROM devices d WHERE d.branch = @branch AND d.status = @status";
+  var params = { branch: req.branch, status: status };
+
+  if (type === "iOS") {
+    sql += " AND d.product_type != 'Accessory' AND lower(d.os) = 'ios'";
+  } else if (type === "Android") {
+    sql += " AND d.product_type != 'Accessory' AND lower(d.os) = 'android'";
+  } else if (type === "Accessory") {
+    sql += " AND d.product_type = 'Accessory'";
+  }
+
+  sql += " GROUP BY d.model ORDER BY cnt DESC";
+
+  var rows = db.prepare(sql).all(params);
+  res.json(rows);
+});
+
+// ─── Stock Lookup API (for Add Stock live search) ───
+app.get("/api/stock-lookup", requireAuth, (req, res) => {
+  var q = (req.query.q || "").toString().trim().toLowerCase();
+  if (!q) return res.json([]);
+  var rows = db.prepare(
+    "SELECT d.model, d.storage, COUNT(*) as cnt FROM devices d WHERE d.branch = @branch AND d.status = 'InStock' AND lower(d.model) LIKE @q GROUP BY d.model, COALESCE(d.storage,'')"
+  ).all({ branch: req.branch, q: '%' + q + '%' });
+  res.json(rows);
 });
 
 app.get("/admin", requireAdmin, (req, res) => {
@@ -1077,6 +1316,16 @@ app.get("/admin", requireAdmin, (req, res) => {
     )
     .all({ branch: req.branch });
 
+  // Birthday alert — customers with birthday today
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const today = new Date();
+  const birthdayCustomers = db.prepare(
+    `SELECT id, name, phone, birth_day, birth_month FROM customers
+     WHERE branch = @branch
+       AND birth_month = @todayMonth
+       AND birth_day = @todayDay`
+  ).all({ branch: req.branch, todayMonth: monthNames[today.getMonth()], todayDay: today.getDate() });
+
   const ok = req.query.ok === "1";
   const users = db.prepare(`SELECT id, name, role, created_at FROM users ORDER BY id DESC`).all();
   res.render("admin/dashboard", {
@@ -1087,8 +1336,10 @@ app.get("/admin", requireAdmin, (req, res) => {
     users,
     userOk: req.query.user_ok === "1",
     userError: null,
+    form: null,
     batches: getStockBatches(req.branch),
-    defaultBatchName: defaultStockBatchName()
+    defaultBatchName: defaultStockBatchName(),
+    birthdayCustomers
   });
 });
 
@@ -1240,16 +1491,38 @@ app.post("/admin/stock", requireAdmin, (req, res) => {
   const result = insertDeviceFromBody({ ...req.body, branch: req.branch, created_by_user_id: req.user.id });
   if (!result.ok) {
     const users = db.prepare(`SELECT id, name, role, created_at FROM users ORDER BY id DESC`).all();
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const today = new Date();
+    const birthdayCustomers = db.prepare(
+      `SELECT id, name, phone, birth_day, birth_month FROM customers
+       WHERE branch = @branch
+         AND birth_month = @todayMonth
+         AND birth_day = @todayDay`
+    ).all({ branch: req.branch, todayMonth: monthNames[today.getMonth()], todayDay: today.getDate() });
     return res.status(400).render("admin/dashboard", {
       error: result.error,
       ok: false,
       recentStock,
       currency,
       users,
+      birthdayCustomers,
       userOk: false,
       userError: null,
       batches: getStockBatches(req.branch),
-      defaultBatchName: normalizeStockBatchName(req.body.stock_batch_name) || defaultStockBatchName()
+      defaultBatchName: normalizeStockBatchName(req.body.stock_batch_name) || defaultStockBatchName(),
+      form: {
+        model: (req.body.model || "").toString(),
+        storage: (req.body.storage || "").toString(),
+        color: (req.body.color || "").toString(),
+        condition: (req.body.condition || "").toString(),
+        cost_price: (req.body.cost_price || "").toString(),
+        sale_price: (req.body.sale_price || "").toString(),
+        imei1: (req.body.imei1 || "").toString(),
+        imei2: (req.body.imei2 || "").toString(),
+        product_type: (req.body.product_type || "").toString(),
+        os: (req.body.os || "").toString(),
+        stock_batch_name: (req.body.stock_batch_name || "").toString()
+      }
     });
   }
   res.redirect("/admin?ok=1");
@@ -1288,12 +1561,25 @@ app.post("/admin/bulk", requireAdmin, (req, res) => {
       defaultBatchName: stockBatchName,
       models: dv.models,
       storages: dv.storages,
-      colors: dv.colors
+      colors: dv.colors,
+      formRows: rawRows.map((r) => ({
+        model: (r.model || "").toString(),
+        storage: (r.storage || "").toString(),
+        color: (r.color || "").toString(),
+        product_type: (r.product_type || "Phone").toString(),
+        os: (r.os || "").toString(),
+        condition: (r.condition || "").toString(),
+        cost_price: (r.cost_price || "").toString(),
+        sale_price: (r.sale_price || "").toString(),
+        imei1: (r.imei1 || "").toString(),
+        imei2: (r.imei2 || "").toString()
+      }))
     });
   }
 
   const results = [];
   const errors = [];
+  const failedRows = [];
 
   for (const row of validRows) {
     const result = insertDeviceFromBody({
@@ -1307,12 +1593,15 @@ app.post("/admin/bulk", requireAdmin, (req, res) => {
       imei1: String(row.imei1 || "").trim(),
       imei2: String(row.imei2 || "").trim() || null,
       stock_batch_name: stockBatchName,
+      product_type: row.product_type || 'Phone',
+      os: row.os || null,
       created_by_user_id: req.user.id
     });
     if (result.ok) {
       results.push(row.model);
     } else {
       errors.push((row.model || "Unknown") + ": " + result.error);
+      failedRows.push(row);
     }
   }
 
@@ -1324,19 +1613,33 @@ app.post("/admin/bulk", requireAdmin, (req, res) => {
     defaultBatchName: stockBatchName,
     models: dv.models,
     storages: dv.storages,
-    colors: dv.colors
+    colors: dv.colors,
+    formRows: failedRows.map((r) => ({
+      model: (r.model || "").toString(),
+      storage: (r.storage || "").toString(),
+      color: (r.color || "").toString(),
+      product_type: (r.product_type || "Phone").toString(),
+      os: (r.os || "").toString(),
+      condition: (r.condition || "").toString(),
+      cost_price: (r.cost_price || "").toString(),
+      sale_price: (r.sale_price || "").toString(),
+      imei1: (r.imei1 || "").toString(),
+      imei2: (r.imei2 || "").toString()
+    }))
   });
 });
 
 app.get("/admin/users", requireAdmin, (req, res) => {
   const message =
     req.query.created === "1"
-      ? "User created"
+      ? "User created successfully!"
       : req.query.password === "1"
-        ? "Password updated"
+        ? "Password updated successfully!"
         : req.query.deleted === "1"
-          ? "User deleted"
-          : null;
+          ? "User deleted."
+          : req.query.edited === "1"
+            ? "User updated successfully!"
+            : null;
   renderAdminUsers(res, { message });
 });
 
@@ -1344,22 +1647,27 @@ app.post("/admin/users", requireAdmin, (req, res) => {
   const name = (req.body.name || "").toString().trim();
   const role = (req.body.role || "").toString().trim();
   const password = (req.body.password || "").toString();
+  const employeeBranch = normalizeBranch(req.body.employee_branch);
 
-  if (!name || !["Admin", "Employee"].includes(role) || password.length < 6) {
-    return renderAdminUsers(res, { status: 400, error: "Enter name, role, and password (6+ characters)." });
+  // Only Employee accounts can be created — admin is locked to Boss
+  if (!name || role !== "Employee" || password.length < 6) {
+    return renderAdminUsers(res, { status: 400, error: "Please enter a username, choose a role, and use a password of at least 6 characters.", form: { name, role: "Employee", employee_branch: employeeBranch || "" } });
+  }
+
+  if (role === "Employee" && !employeeBranch) {
+    return renderAdminUsers(res, { status: 400, error: "An employee needs a branch — please pick one from the dropdown.", form: { name, role, employee_branch: "" } });
   }
 
   const existing = db.prepare(`SELECT id FROM users WHERE lower(name) = lower(@name)`).get({ name });
   if (existing) {
-    return renderAdminUsers(res, { status: 400, error: "Username taken." });
+    return renderAdminUsers(res, { status: 400, error: "That username is already taken — try a different one.", form: { name, role, employee_branch: employeeBranch || "" } });
   }
 
-  const { password_salt, password_hash } = hashPassword(password);
   try {
     db.prepare(
-      `INSERT INTO users (name, role, password_salt, password_hash, created_at)
-       VALUES (@name, @role, @password_salt, @password_hash, @created_at)`
-    ).run({ name, role, password_salt, password_hash, created_at: nowIso() });
+      `INSERT INTO users (name, role, branch, password, created_at)
+       VALUES (@name, @role, @branch, @password, @created_at)`
+    ).run({ name, role, branch: employeeBranch || null, password, created_at: nowIso() });
     res.redirect("/admin/users?created=1");
   } catch (e) {
     renderAdminUsers(res, { status: 400, error: String(e.message || e) });
@@ -1373,32 +1681,70 @@ app.post("/admin/users/:id/password", requireAdmin, (req, res) => {
 
   if (!target) return renderAdminUsers(res, { status: 404, error: "User not found." });
   if (password.length < 6) {
-    return renderAdminUsers(res, { status: 400, error: "Password: 6+ characters." });
+    return renderAdminUsers(res, { status: 400, error: "Password must be at least 6 characters, please." });
   }
 
-  const { password_salt, password_hash } = hashPassword(password);
   db.prepare(
     `UPDATE users
-     SET password_salt = @password_salt,
-         password_hash = @password_hash
+     SET password = @password
      WHERE id = @id`
-  ).run({ id, password_salt, password_hash });
+  ).run({ id, password });
 
   res.redirect("/admin/users?password=1");
+});
+
+app.post("/admin/users/:id/edit", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const target = findUserById(id);
+  if (!target) return renderAdminUsers(res, { status: 404, error: "Hmm, that user doesn't exist." });
+
+  const name = (req.body.name || "").toString().trim();
+  const role = (req.body.role || "").toString().trim();
+  const employeeBranch = normalizeBranch(req.body.employee_branch);
+
+  // Employees can only stay Employee — no new admin accounts allowed
+  const allowedRoles = target.role === "Admin" ? ["Admin", "Employee"] : ["Employee"];
+  if (!name || !allowedRoles.includes(role)) {
+    return renderAdminUsers(res, { status: 400, error: "Please enter a username and choose a role." });
+  }
+
+  if (role === "Employee" && !employeeBranch) {
+    return renderAdminUsers(res, { status: 400, error: "An employee needs a branch — please pick one." });
+  }
+
+  // Check if name is taken by someone else
+  const dup = db.prepare(`SELECT id FROM users WHERE lower(name) = lower(@name) AND id != @id`).get({ name, id });
+  if (dup) {
+    return renderAdminUsers(res, { status: 400, error: "That username is already taken by someone else." });
+  }
+
+  // Prevent demoting last admin
+  if (target.role === "Admin" && role !== "Admin") {
+    const adminCount = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE role = 'Admin'`).get().c;
+    if (adminCount <= 1) {
+      return renderAdminUsers(res, { status: 400, error: "You can't change this user — there must be at least one admin." });
+    }
+  }
+
+  db.prepare(
+    `UPDATE users SET name = @name, role = @role, branch = @branch WHERE id = @id`
+  ).run({ id, name, role, branch: role === "Employee" ? employeeBranch : null });
+
+  res.redirect("/admin/users?edited=1");
 });
 
 app.post("/admin/users/:id/delete", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const target = findUserById(id);
 
-  if (!target) return renderAdminUsers(res, { status: 404, error: "User not found." });
+  if (!target) return renderAdminUsers(res, { status: 404, error: "Hmm, that user doesn't exist." });
   if (target.id === req.user.id) {
-    return renderAdminUsers(res, { status: 400, error: "Can't delete your own account." });
+    return renderAdminUsers(res, { status: 400, error: "You can't delete your own account, silly!" });
   }
   if (target.role === "Admin") {
     const adminCount = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE role = 'Admin'`).get().c;
     if (adminCount <= 1) {
-      return renderAdminUsers(res, { status: 400, error: "Keep at least 1 admin." });
+      return renderAdminUsers(res, { status: 400, error: "You need at least one admin — can't delete the last one." });
     }
   }
 
@@ -1419,33 +1765,51 @@ app.get("/reports/profit", requireAdmin, (req, res) => {
 app.get("/inventory/summary", requireAuth, (req, res) => {
   const items = db
     .prepare(
-      "SELECT d.model, d.storage, d.color, d.status, d.product_type, d.os, d.sale_price, group_concat(di.imei, ', ') AS imeis FROM devices d LEFT JOIN device_imeis di ON di.device_id = d.id WHERE d.branch = @branch GROUP BY d.id ORDER BY d.model, d.storage"
+      `SELECT d.model, d.storage, d.color, d.product_type, d.os, MIN(d.sale_price) as sale_price,
+         COUNT(DISTINCT CASE WHEN d.status='InStock' THEN d.id END) as in_stock,
+         COUNT(DISTINCT CASE WHEN d.status='Sold' THEN d.id END) as sold,
+         group_concat(CASE WHEN d.status='InStock' THEN di.imei END, ', ') AS imeis
+       FROM devices d LEFT JOIN device_imeis di ON di.device_id = d.id
+       WHERE d.branch = @branch
+       GROUP BY d.model, COALESCE(d.storage,''), COALESCE(d.color,''), d.product_type, COALESCE(d.os,'')
+       ORDER BY d.product_type, d.os, d.model, d.storage`
     )
     .all({ branch: req.branch });
 
-  var inStock = { total: 0, iOS: 0, Android: 0, Accessory: 0, byModel: {} };
-  var sold = { total: 0, iOS: 0, Android: 0, Accessory: 0, byModel: {} };
-  var stockModels = {};
+  var inStock = { total: 0, iOS: 0, Android: 0, Accessory: 0, byModel: {}, byModelType: {}, byModelOnly: {}, byModelOnlyType: {} };
+  var sold = { total: 0, iOS: 0, Android: 0, Accessory: 0, byModel: {}, byModelType: {}, byModelOnly: {}, byModelOnlyType: {} };
 
   items.forEach(function(d) {
     var key = d.model + " " + (d.storage||"");
-    var isSold = d.status === "Sold";
-    var cat = d.product_type === "Accessory" ? "Accessory" : d.os || "Other";
-    
-    if (isSold) {
-      sold.total++;
-      if (cat === "iOS") sold.iOS++;
-      else if (cat === "Android") sold.Android++;
-      else sold.Accessory++;
-      if (!sold.byModel[key]) sold.byModel[key] = 0;
-      sold.byModel[key]++;
-    } else {
-      inStock.total++;
-      if (cat === "iOS") inStock.iOS++;
-      else if (cat === "Android") inStock.Android++;
-      else inStock.Accessory++;
+    var modelKey = d.model;
+    var cat = d.product_type === "Accessory" ? "Accessory" : d.os === "iOS" ? "iOS" : d.os === "Android" ? "Android" : "Other";
+    var inCnt = d.in_stock || 0;
+    var soldCnt = d.sold || 0;
+
+    if (inCnt > 0) {
+      inStock.total += inCnt;
+      if (cat === "iOS") inStock.iOS += inCnt;
+      else if (cat === "Android") inStock.Android += inCnt;
+      else if (cat === "Accessory") inStock.Accessory += inCnt;
       if (!inStock.byModel[key]) inStock.byModel[key] = 0;
-      inStock.byModel[key]++;
+      inStock.byModel[key] += inCnt;
+      inStock.byModelType[key] = cat;
+      if (!inStock.byModelOnly[modelKey]) inStock.byModelOnly[modelKey] = 0;
+      inStock.byModelOnly[modelKey] += inCnt;
+      inStock.byModelOnlyType[modelKey] = cat;
+    }
+
+    if (soldCnt > 0) {
+      sold.total += soldCnt;
+      if (cat === "iOS") sold.iOS += soldCnt;
+      else if (cat === "Android") sold.Android += soldCnt;
+      else if (cat === "Accessory") sold.Accessory += soldCnt;
+      if (!sold.byModel[key]) sold.byModel[key] = 0;
+      sold.byModel[key] += soldCnt;
+      sold.byModelType[key] = cat;
+      if (!sold.byModelOnly[modelKey]) sold.byModelOnly[modelKey] = 0;
+      sold.byModelOnly[modelKey] += soldCnt;
+      sold.byModelOnlyType[modelKey] = cat;
     }
   });
 
@@ -1453,43 +1817,109 @@ app.get("/inventory/summary", requireAuth, (req, res) => {
 });
 
 app.get("/inventory", requireAuth, (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const perPage = 20;
+  const offset = (page - 1) * perPage;
+
+  const countRow = db
+    .prepare(
+      `SELECT COUNT(*) as total FROM (
+         SELECT d.model, d.storage, d.sale_price
+         FROM devices d
+         WHERE d.branch = @branch
+         GROUP BY d.model, d.storage, d.sale_price
+       )`
+    )
+    .get({ branch: req.branch });
+  const totalCount = countRow ? countRow.total : 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
+
   const items = db
     .prepare(
-      `SELECT d.*, d.product_type, d.os, sb.name AS stock_batch_name, group_concat(di.imei, ', ') AS imeis
+      `SELECT MIN(d.id) AS id, d.model, d.storage, d.color, d.product_type, d.os, d.sale_price,
+              SUM(CASE WHEN d.status = 'InStock' OR d.status = 'Returned' THEN 1 ELSE 0 END) as in_stock,
+              SUM(CASE WHEN d.status = 'Sold' THEN 1 ELSE 0 END) as sold
        FROM devices d
-       LEFT JOIN device_imeis di ON di.device_id = d.id
-       LEFT JOIN stock_batches sb ON sb.id = d.stock_batch_id
        WHERE d.branch = @branch
-       GROUP BY d.id
-       ORDER BY d.id DESC`
+       GROUP BY d.model, d.storage, d.sale_price
+       ORDER BY d.model, d.storage
+       LIMIT @limit OFFSET @offset`
     )
-    .all({ branch: req.branch });
+    .all({ branch: req.branch, limit: perPage, offset });
   res.render("inventory/list", {
     items,
     currency,
+    page, perPage, totalPages, totalCount,
+    lowStockThreshold,
     message: req.query.updated === "1" ? "Stock updated successfully." : req.query.deleted === "1" ? "Stock deleted successfully." : null,
     error: req.query.error || null
   });
 });
 
 app.get("/inventory/new", requireAdmin, (req, res) => {
+  const dv = getDistinctDeviceValues(req.branch);
   res.render("inventory/new", {
+    form: null,
     error: null,
     batches: getStockBatches(req.branch),
-    defaultBatchName: defaultStockBatchName()
+    defaultBatchName: defaultStockBatchName(),
+    models: dv.models
   });
 });
 
 app.post("/inventory/new", requireAdmin, (req, res) => {
   const result = insertDeviceFromBody({ ...req.body, branch: req.branch, created_by_user_id: req.user.id });
   if (!result.ok) {
+    const dv = getDistinctDeviceValues(req.branch);
     return res.status(400).render("inventory/new", {
       error: result.error,
       batches: getStockBatches(req.branch),
-      defaultBatchName: normalizeStockBatchName(req.body.stock_batch_name)
+      defaultBatchName: normalizeStockBatchName(req.body.stock_batch_name),
+      models: dv.models,
+      form: {
+        model: (req.body.model || "").toString(),
+        storage: (req.body.storage || "").toString(),
+        color: (req.body.color || "").toString(),
+        condition: (req.body.condition || "").toString(),
+        cost_price: (req.body.cost_price || "").toString(),
+        sale_price: (req.body.sale_price || "").toString(),
+        imei1: (req.body.imei1 || "").toString(),
+        imei2: (req.body.imei2 || "").toString(),
+        product_type: (req.body.product_type || "").toString(),
+        os: (req.body.os || "").toString()
+      }
     });
   }
   res.redirect("/inventory");
+});
+
+// ─── ACCESSORIES ───
+app.get("/inventory/accessory/new", requireAdmin, (req, res) => {
+  res.render("inventory/accessory-new", {
+    form: null,
+    error: null
+  });
+});
+
+app.post("/inventory/accessory/new", requireAdmin, (req, res) => {
+  var quantity = Math.max(1, Math.min(100, parseInt(req.body.quantity) || 1));
+  var formData = {
+    model: (req.body.model || "").toString(),
+    cost_price: (req.body.cost_price || "").toString(),
+    sale_price: (req.body.sale_price || "").toString(),
+    quantity: quantity
+  };
+  for (var i = 0; i < quantity; i++) {
+    var body = { ...req.body, branch: req.branch, created_by_user_id: req.user.id, product_type: "Accessory" };
+    var result = insertDeviceFromBody(body);
+    if (!result.ok) {
+      return res.status(400).render("inventory/accessory-new", {
+        error: result.error,
+        form: formData
+      });
+    }
+  }
+  res.redirect("/inventory?added=" + quantity);
 });
 
 app.get("/inventory/:id/edit", requireAdmin, (req, res) => {
@@ -1497,11 +1927,13 @@ app.get("/inventory/:id/edit", requireAdmin, (req, res) => {
   const item = getDeviceWithImeis(id, req.branch);
   if (!item) return res.status(404).send("Stock item not found");
 
+  const dv = getDistinctDeviceValues(req.branch);
   const imeis = (item.imeis || "").split(",").map((v) => v.trim()).filter(Boolean);
   res.render("inventory/edit", {
     item: { ...item, imei1: imeis[0] || "", imei2: imeis[1] || "" },
     error: null,
-    batches: getStockBatches(req.branch)
+    batches: getStockBatches(req.branch),
+    models: dv.models
   });
 });
 
@@ -1511,10 +1943,12 @@ app.post("/inventory/:id/edit", requireAdmin, (req, res) => {
   if (!result.ok) {
     const item = getDeviceWithImeis(id, req.branch);
     if (!item) return res.status(404).send("Stock item not found");
+    const dv = getDistinctDeviceValues(req.branch);
     return res.status(400).render("inventory/edit", {
       item: { ...item, ...req.body },
       error: result.error,
-      batches: getStockBatches(req.branch)
+      batches: getStockBatches(req.branch),
+      models: dv.models
     });
   }
   res.redirect("/inventory?updated=1");
@@ -1541,18 +1975,32 @@ app.get("/customers", requireAuth, (req, res) => {
 });
 
 app.get("/customers/new", requireAuth, (req, res) => {
-  res.render("customers/new", { error: null });
+  res.render("customers/new", { form: null, error: null });
 });
 
 app.post("/customers/new", requireAuth, (req, res) => {
-  const { name, phone, address, id_type, id_number, customer_type, ghana_card, id_held } = req.body;
-  if (!name || !phone) return res.status(400).render("customers/new", { error: "Enter name and phone." });
+  const { name, phone, address, id_type, id_number, customer_type, ghana_card, id_held, birth_day, birth_month } = req.body;
+  if (!name || !phone) return res.status(400).render("customers/new", {
+    error: "Enter name and phone.",
+    form: {
+      name: (name || "").toString(),
+      phone: (phone || "").toString(),
+      address: (address || "").toString(),
+      ghana_card: (ghana_card || "").toString(),
+      customer_type: (customer_type || "Customer").toString(),
+      id_held: (id_held === "1" || id_held === "on"),
+      birth_day: Number(birth_day) || null,
+      birth_month: birth_month || null
+    }
+  });
   const type = customer_type === "Dealer" ? "Dealer" : "Customer";
   const card = String(ghana_card || "").trim() || null;
   const holdId = id_held === "1" || id_held === "on";
+  const bday = Number(birth_day) || null;
+  const bmonth = birth_month || null;
   db.prepare(
-    `INSERT INTO customers (branch, name, phone, address, id_type, id_number, customer_type, ghana_card, id_held, id_held_at, created_at)
-     VALUES (@branch, @name, @phone, @address, @id_type, @id_number, @customer_type, @ghana_card, @id_held, @id_held_at, @created_at)`
+    `INSERT INTO customers (branch, name, phone, address, id_type, id_number, customer_type, ghana_card, id_held, id_held_at, birth_day, birth_month, created_at)
+     VALUES (@branch, @name, @phone, @address, @id_type, @id_number, @customer_type, @ghana_card, @id_held, @id_held_at, @birth_day, @birth_month, @created_at)`
   ).run({
     branch: req.branch,
     name,
@@ -1564,6 +2012,8 @@ app.post("/customers/new", requireAuth, (req, res) => {
     ghana_card: card,
     id_held: holdId ? 1 : 0,
     id_held_at: holdId ? nowIso() : null,
+    birth_day: bday,
+    birth_month: bmonth,
     created_at: nowIso()
   });
   res.redirect("/customers");
@@ -1580,13 +2030,18 @@ app.post("/customers/:id/edit", requireAuth, (req, res) => {
   const customer = db.prepare(`SELECT * FROM customers WHERE id = @id AND branch = @branch`).get({ id, branch: req.branch });
   if (!customer) return res.status(404).send("Customer not found");
 
-  const { name, phone, address, id_type, id_number, customer_type, ghana_card, id_held } = req.body;
-  if (!name || !phone) return res.status(400).render("customers/edit", { customer, error: "Enter name and phone." });
+  const { name, phone, address, id_type, id_number, customer_type, ghana_card, id_held, birth_day, birth_month } = req.body;
+  if (!name || !phone) return res.status(400).render("customers/edit", {
+    customer: { ...customer, name: (name||"").toString(), phone: (phone||"").toString(), address: (address||"").toString(), customer_type: (customer_type||"Customer").toString(), ghana_card: (ghana_card||"").toString(), id_held: (id_held === "1" || id_held === "on") ? 1 : 0, birth_day: Number(birth_day) || null, birth_month: birth_month || null },
+    error: "Enter name and phone."
+  });
   const type = customer_type === "Dealer" ? "Dealer" : "Customer";
   const card = String(ghana_card || "").trim() || null;
   const holdId = id_held === "1" || id_held === "on";
+  const bday = Number(birth_day) || null;
+  const bmonth = birth_month || null;
   db.prepare(
-    `UPDATE customers SET name = @name, phone = @phone, address = @address, id_type = @id_type, id_number = @id_number, customer_type = @customer_type, ghana_card = @ghana_card, id_held = @id_held, id_held_at = @id_held_at WHERE id = @id AND branch = @branch`
+    `UPDATE customers SET name = @name, phone = @phone, address = @address, id_type = @id_type, id_number = @id_number, customer_type = @customer_type, ghana_card = @ghana_card, id_held = @id_held, id_held_at = @id_held_at, birth_day = @birth_day, birth_month = @birth_month WHERE id = @id AND branch = @branch`
   ).run({
     name, phone,
     address: address || null,
@@ -1596,6 +2051,8 @@ app.post("/customers/:id/edit", requireAuth, (req, res) => {
     ghana_card: card,
     id_held: holdId ? 1 : 0,
     id_held_at: holdId ? nowIso() : null,
+    birth_day: bday,
+    birth_month: bmonth,
     id,
     branch: req.branch
   });
@@ -1603,20 +2060,82 @@ app.post("/customers/:id/edit", requireAuth, (req, res) => {
 });
 
 app.get("/sales", requireAuth, (req, res) => {
+  var filterToday = req.query.today === "1";
+  var fromDate = req.query.from || "";
+  var toDate = req.query.to || "";
+  var searchMonth = req.query.month || "";
+  var searchCustomer = (req.query.customer || "").trim();
+  var searchSalesperson = (req.query.salesperson || "").trim();
+  var showReturned = req.query.show_returned === "1";
+  var page = Math.max(1, parseInt(req.query.page) || 1);
+  var perPage = 20;
+  var offset = (page - 1) * perPage;
+
+  var conditions = [];
+  var params = { branch: req.branch };
+
+  if (showReturned) {
+    conditions.push("s.is_returned = 1");
+  } else {
+    conditions.push("s.is_returned = 0");
+  }
+  if (filterToday) {
+    conditions.push("substr(s.created_at, 1, 10) = @today");
+    params.today = todayIsoDate();
+  }
+  if (fromDate) {
+    conditions.push("date(s.created_at) >= @fromDate");
+    params.fromDate = fromDate;
+  }
+  if (toDate) {
+    conditions.push("date(s.created_at) <= @toDate");
+    params.toDate = toDate;
+  }
+  if (searchMonth) {
+    conditions.push("substr(s.created_at, 1, 7) = @searchMonth");
+    params.searchMonth = searchMonth;
+  }
+  if (searchCustomer) {
+    conditions.push("c.name LIKE @searchCustomer");
+    params.searchCustomer = "%" + searchCustomer + "%";
+  }
+  if (searchSalesperson) {
+    conditions.push("COALESCE(NULLIF(s.created_by_user_name, ''), u.name, 'Unknown') = @searchSalesperson");
+    params.searchSalesperson = searchSalesperson;
+  }
+
+  var filterSql = conditions.length > 0 ? " AND " + conditions.join(" AND ") : "";
+
+  var countRow = db
+    .prepare(
+      `SELECT COUNT(*) as total
+       FROM sales s
+       JOIN customers c ON c.id = s.customer_id
+       WHERE s.branch = @branch${filterSql}`
+    )
+    .get(params);
+  var totalCount = countRow ? countRow.total : 0;
+  var totalPages = Math.max(1, Math.ceil(totalCount / perPage));
+
+  params.limit = perPage;
+  params.offset = offset;
+
   const sales = db
     .prepare(
       `SELECT s.*,
               c.name AS customer_name,
               d.model AS device_model,
-              COALESCE(NULLIF(s.created_by_user_name, ''), u.name, 'Unknown') AS salesperson_name
+              COALESCE(NULLIF(s.created_by_user_name, ''), u.name, 'Unknown') AS salesperson_name,
+              (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS item_count
        FROM sales s
        JOIN customers c ON c.id = s.customer_id
        JOIN devices d ON d.id = s.device_id
        LEFT JOIN users u ON u.id = s.created_by_user_id
-       WHERE s.branch = @branch
-       ORDER BY s.id DESC`
+       WHERE s.branch = @branch${filterSql}
+       ORDER BY s.id DESC
+       LIMIT @limit OFFSET @offset`
     )
-    .all({ branch: req.branch });
+    .all(params);
   const trade = db
     .prepare(
       `SELECT ti.sale_id, ti.trade_in_value
@@ -1632,7 +2151,8 @@ app.get("/sales", requireAuth, (req, res) => {
     const payable = Math.max(0, net - tradeValue);
     return { ...s, net, trade_in_value: tradeValue, payable };
   });
-  res.render("sales/list", { sales: enriched, currency });
+  const salesUsers = db.prepare(`SELECT DISTINCT COALESCE(NULLIF(s.created_by_user_name, ''), u.name, 'Unknown') AS name FROM sales s LEFT JOIN users u ON u.id = s.created_by_user_id WHERE s.branch = @branch ORDER BY name`).all({ branch: req.branch }).map(r => r.name);
+  res.render("sales/list", { sales: enriched, currency, filterToday, fromDate, toDate, searchMonth, searchCustomer, searchSalesperson, salesUsers, showReturned, page, perPage, totalPages, totalCount });
 });
 
 app.get("/sales/new", requireAuth, (req, res) => {
@@ -1653,7 +2173,6 @@ app.get("/sales/new", requireAuth, (req, res) => {
 
 app.post("/sales/new", requireAuth, (req, res) => {
   const {
-    device_id,
     customer_id,
     create_customer,
     customer_name,
@@ -1677,7 +2196,32 @@ app.post("/sales/new", requireAuth, (req, res) => {
     trade_imei1,
     trade_imei2
   } = req.body;
-  const deviceId = Number(device_id);
+
+  // --- PARSE CART ITEMS ---
+  let cartDevices = req.body.devices || [];
+  let cartPrices = req.body.prices || [];
+  let cartDiscounts = req.body.item_discounts || [];
+  let cartQuantities = req.body.quantities || [];
+  // Ensure arrays (express may send single value if only one item)
+  if (!Array.isArray(cartDevices)) cartDevices = [cartDevices];
+  if (!Array.isArray(cartPrices)) cartPrices = [cartPrices];
+  if (!Array.isArray(cartDiscounts)) cartDiscounts = [cartDiscounts];
+  if (!Array.isArray(cartQuantities)) cartQuantities = [cartQuantities];
+
+  // Build cart items
+  const cartItems = cartDevices.map((did, i) => ({
+    device_id: Number(did),
+    unit_price: moneyToInt(cartPrices[i] || 0) || 0,
+    discount: moneyToInt(cartDiscounts[i] || 0) || 0,
+    quantity: Math.max(1, parseInt(cartQuantities[i]) || 1)
+  })).filter(item => item.device_id > 0 && item.unit_price > 0);
+
+  const totalSalePrice = cartItems.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+  const totalDiscount = cartItems.reduce((sum, item) => sum + item.discount, 0);
+  const firstDeviceId = cartItems.length > 0 ? cartItems[0].device_id : 0;
+
+  const normalizedTradeModel = normalizeModel(trade_model);
+  const deviceId = firstDeviceId;
   const selectedCustomerId = Number(customer_id);
   const shouldCreateCustomer = create_customer === "on";
   const newCustomerName = (customer_name || "").toString().trim();
@@ -1685,8 +2229,8 @@ app.post("/sales/new", requireAuth, (req, res) => {
   const newCustomerAddress = (customer_address || "").toString().trim() || null;
   const newCustomerIdType = (customer_id_type || "").toString().trim() || null;
   const newCustomerIdNumber = (customer_id_number || "").toString().trim() || null;
-  const salePrice = moneyToInt(sale_price);
-  const discountInt = moneyToInt(discount || 0) ?? 0;
+  const salePrice = totalSalePrice;
+  const discountInt = totalDiscount;
   const downPaymentInt = moneyToInt(down_payment || 0) ?? 0;
   const tradeValueInt = moneyToInt(trade_in_value || 0) ?? 0;
   const isSwap = sale_type === "SwapFull" || sale_type === "SwapInstallment";
@@ -1705,47 +2249,88 @@ app.post("/sales/new", requireAuth, (req, res) => {
     .all({ branch: req.branch });
   const customers = db.prepare(`SELECT * FROM customers WHERE branch = @branch ORDER BY customer_type DESC, name ASC`).all({ branch: req.branch });
 
-  if (!deviceId || !sale_type || salePrice == null) {
-    return res.status(400).render("sales/new", { devices, customers, error: "Select a device, sale type, and enter a price." });
+  const formData = {
+    sale_type: sale_type || "",
+    product_type: (req.body.product_type || "Phone").toString(),
+    device_os: (req.body.device_os || "").toString(),
+    device_id: deviceId || 0,
+    customer_id: selectedCustomerId || 0,
+    create_customer: shouldCreateCustomer,
+    customer_name: newCustomerName,
+    customer_phone: newCustomerPhone,
+    customer_address: newCustomerAddress || "",
+    ghana_card: (ghana_card || "").toString(),
+    id_held: id_held === "1" || id_held === "on",
+    sale_price: (sale_price || "").toString(),
+    discount: (discount || "").toString(),
+    down_payment: (down_payment || "").toString(),
+    payment_method: (payment_method || "Cash").toString(),
+    trade_model: (trade_model || "").toString(),
+    trade_storage: (trade_storage || "").toString(),
+    trade_color: (trade_color || "").toString(),
+    trade_condition: (trade_condition || "").toString(),
+    trade_in_value: (trade_in_value || "").toString(),
+    trade_imei1: (trade_imei1 || "").toString(),
+    trade_imei2: (trade_imei2 || "").toString(),
+    cart: cartItems.map(item => {
+      const d = db.prepare(`SELECT model, storage, color, condition FROM devices WHERE id = @id`).get({ id: item.device_id });
+      return {
+        device_id: item.device_id,
+        model: d ? d.model : 'Unknown',
+        variant: d ? [d.storage, d.color, d.condition].filter(Boolean).join(' / ') : '',
+        imeis: '',
+        unit_price: item.unit_price,
+        discount: item.discount,
+        quantity: item.quantity
+      };
+    })
+  };
+
+  if (cartItems.length === 0 || !sale_type || salePrice == null) {
+    return res.status(400).render("sales/new", { devices, customers, form: formData, error: "Add at least one device to cart, select a sale type, and enter prices." });
   }
 
   if (shouldCreateCustomer) {
     if (!newCustomerName || !newCustomerPhone) {
-      return res.status(400).render("sales/new", { devices, customers, error: "Enter customer name and phone." });
+      return res.status(400).render("sales/new", { devices, customers, form: formData, error: "Enter customer name and phone." });
     }
     if (isInstallment && !String(ghana_card || "").trim()) {
-      return res.status(400).render("sales/new", { devices, customers, error: "Ghana Card is required for installment." });
+      return res.status(400).render("sales/new", { devices, customers, form: formData, error: "Ghana Card is required for installment." });
     }
   } else {
     if (!selectedCustomerId) {
-      return res.status(400).render("sales/new", { devices, customers, error: "Pick a customer or click '+ New'." });
+      return res.status(400).render("sales/new", { devices, customers, form: formData, error: "Pick a customer or click '+ New'." });
     }
     const selectedCustomer = db
       .prepare(`SELECT * FROM customers WHERE id = @id AND branch = @branch`)
       .get({ id: selectedCustomerId, branch: req.branch });
     if (!selectedCustomer) {
-      return res.status(400).render("sales/new", { devices, customers, error: "Customer not in this shop." });
+      return res.status(400).render("sales/new", { devices, customers, form: formData, error: "Customer not in this shop." });
     }
-    if (isInstallment && !(selectedCustomer.ghana_card || "").trim() && !String(req.body.ghana_card_existing || "").trim()) {
-      return res.status(400).render("sales/new", { devices, customers, error: "This customer has no Ghana Card. Enter it below." });
+    if (isInstallment && !(selectedCustomer.ghana_card || "").trim() && !String(req.body.ghana_card_existing || req.body.ghana_card || "").trim()) {
+      return res.status(400).render("sales/new", { devices, customers, form: formData, error: "This customer has no Ghana Card. Enter it below." });
     }
   }
 
   if (!["Full", "Installment", "SwapFull", "SwapInstallment"].includes(sale_type)) {
-    return res.status(400).render("sales/new", { devices, customers, error: "Choose a sale type." });
+    return res.status(400).render("sales/new", { devices, customers, form: formData, error: "Choose a sale type." });
   }
 
   const tradeImeis = [trade_imei1, trade_imei2].map((v) => (v || "").trim()).filter(Boolean);
   if (isSwap) {
-    if (!trade_model || !trade_condition || tradeValueInt <= 0 || tradeImeis.length === 0) {
-      return res.status(400).render("sales/new", { devices, customers, error: "Swap needs model, condition, value, and at least 1 IMEI." });
+    if (!normalizedTradeModel || !trade_condition || tradeValueInt <= 0 || tradeImeis.length === 0) {
+      return res.status(400).render("sales/new", { devices, customers, form: formData, error: "Swap needs model, condition, value, and at least 1 IMEI." });
     }
   }
 
-  const device = db.prepare(`SELECT * FROM devices WHERE id = @id AND branch = @branch`).get({ id: deviceId, branch: req.branch });
-  if (!device || device.status !== "InStock") {
-    return res.status(400).render("sales/new", { devices, customers, error: "Device no longer in stock. Pick another." });
+  // Validate all cart devices are in stock
+  for (const item of cartItems) {
+    const d = db.prepare(`SELECT * FROM devices WHERE id = @id AND branch = @branch`).get({ id: item.device_id, branch: req.branch });
+    if (!d || d.status !== "InStock") {
+      return res.status(400).render("sales/new", { devices, customers, form: formData, error: `Device #${item.device_id} is no longer in stock. Remove it from cart and try again.` });
+    }
   }
+  const firstDevice = db.prepare(`SELECT * FROM devices WHERE id = @id AND branch = @branch`).get({ id: firstDeviceId, branch: req.branch });
 
   const invoiceNo = `INV-${Date.now()}`;
 
@@ -1777,7 +2362,7 @@ app.post("/sales/new", requireAuth, (req, res) => {
     }
 
     // Update existing customer's Ghana Card if provided via inline field
-    const ghanaCardExisting = String(req.body.ghana_card_existing || "").trim();
+    const ghanaCardExisting = String(req.body.ghana_card_existing || req.body.ghana_card || "").trim();
     if (!shouldCreateCustomer && ghanaCardExisting) {
       db.prepare(`UPDATE customers SET ghana_card = @card WHERE id = @id AND branch = @branch`).run({
         card: ghanaCardExisting,
@@ -1796,7 +2381,7 @@ app.post("/sales/new", requireAuth, (req, res) => {
         invoice_no: invoiceNo,
         sale_type,
         customer_id: customerId,
-        device_id: deviceId,
+        device_id: firstDeviceId,
         sale_price: salePrice,
         discount: discountInt,
         created_by_user_id: req.user.id,
@@ -1806,7 +2391,40 @@ app.post("/sales/new", requireAuth, (req, res) => {
 
     const saleId = saleIns.lastInsertRowid;
 
-    db.prepare(`UPDATE devices SET status = 'Sold' WHERE id = @id AND branch = @branch`).run({ id: deviceId, branch: req.branch });
+    // Insert all cart items and mark each device as Sold
+    const stmtItem = db.prepare(
+      `INSERT INTO sale_items (sale_id, device_id, unit_price, discount, created_at)
+       VALUES (@sale_id, @device_id, @unit_price, @discount, @created_at)`
+    );
+    const stmtSold = db.prepare(`UPDATE devices SET status = 'Sold' WHERE id = @id AND branch = @branch`);
+    for (const item of cartItems) {
+      const itemDiscount = Math.round(item.discount / item.quantity); // split discount across units
+      // Sell each individual device (quantity may be >1 for accessories)
+      let devicesToSell = [{ id: item.device_id }];
+      if (item.quantity > 1) {
+        // Find additional InStock devices of the same model
+        const modelRow = db.prepare(`SELECT model FROM devices WHERE id = @id`).get({ id: item.device_id });
+        if (modelRow) {
+          const extras = db.prepare(
+            `SELECT id FROM devices WHERE branch = @branch AND model = @model AND status = 'InStock' AND id != @id ORDER BY id LIMIT @limit`
+          ).all({ branch: req.branch, model: modelRow.model, id: item.device_id, limit: item.quantity - 1 });
+          for (const ext of extras) devicesToSell.push(ext);
+        }
+        if (devicesToSell.length < item.quantity) {
+          throw new Error(`Not enough "${modelRow?.model || 'Unknown'}" in stock. Need ${item.quantity}, have ${devicesToSell.length}.`);
+        }
+      }
+      for (const dev of devicesToSell) {
+        stmtItem.run({
+          sale_id: saleId,
+          device_id: dev.id,
+          unit_price: item.unit_price,
+          discount: itemDiscount,
+          created_at: nowIso()
+        });
+        stmtSold.run({ id: dev.id, branch: req.branch });
+      }
+    }
 
     const net = Math.max(0, salePrice - discountInt);
     const payable = Math.max(0, net - (isSwap ? tradeValueInt : 0));
@@ -1819,7 +2437,7 @@ app.post("/sales/new", requireAuth, (req, res) => {
         )
         .run({
           sale_id: saleId,
-          device_model: trade_model,
+          device_model: normalizedTradeModel,
           storage: trade_storage || null,
           color: trade_color || null,
           device_condition: trade_condition,
@@ -1841,7 +2459,7 @@ app.post("/sales/new", requireAuth, (req, res) => {
         .run({
           branch: req.branch,
           stock_batch_id: findOrCreateStockBatch(req.branch, "Trade-ins", "Phones received through swap sales"),
-          model: trade_model,
+          model: normalizedTradeModel,
           storage: trade_storage || null,
           color: trade_color || null,
           condition: trade_condition,
@@ -1917,8 +2535,68 @@ app.post("/sales/new", requireAuth, (req, res) => {
     tx();
     res.redirect("/sales");
   } catch (e) {
-    res.status(400).render("sales/new", { devices, customers, error: String(e.message || e) });
+    res.status(400).render("sales/new", { devices, customers, form: formData, error: String(e.message || e) });
   }
+});
+
+// ── CSV EXPORTS ──────────────────────────────────────────────
+app.get("/sales/export", requireAuth, (req, res) => {
+  var filterToday = req.query.today === "1";
+  var fromDate = req.query.from || "";
+  var toDate = req.query.to || "";
+  var searchMonth = req.query.month || "";
+  var searchCustomer = (req.query.customer || "").trim();
+  var searchSalesperson = (req.query.salesperson || "").trim();
+  var showReturned = req.query.show_returned === "1";
+
+  var conditions = [];
+  var params = { branch: req.branch };
+  if (showReturned) {
+    conditions.push("s.is_returned = 1");
+  } else {
+    conditions.push("s.is_returned = 0");
+  }
+  if (filterToday) { conditions.push("substr(s.created_at, 1, 10) = @today"); params.today = todayIsoDate(); }
+  if (fromDate) { conditions.push("date(s.created_at) >= @fromDate"); params.fromDate = fromDate; }
+  if (toDate) { conditions.push("date(s.created_at) <= @toDate"); params.toDate = toDate; }
+  if (searchMonth) { conditions.push("substr(s.created_at, 1, 7) = @searchMonth"); params.searchMonth = searchMonth; }
+  if (searchCustomer) { conditions.push("c.name LIKE @searchCustomer"); params.searchCustomer = "%" + searchCustomer + "%"; }
+  if (searchSalesperson) { conditions.push("COALESCE(NULLIF(s.created_by_user_name, ''), u.name, 'Unknown') = @searchSalesperson"); params.searchSalesperson = searchSalesperson; }
+  var filterSql = conditions.length > 0 ? " AND " + conditions.join(" AND ") : "";
+
+  const rows = db.prepare(
+    `SELECT s.id, s.invoice_no, c.name AS customer_name, c.phone AS customer_phone,
+            d.model AS device_model, d.product_type,
+            COALESCE(NULLIF(s.created_by_user_name, ''), u.name, 'Unknown') AS salesperson_name,
+            s.sale_type, s.sale_price, s.discount,
+            s.created_at, s.is_returned
+     FROM sales s
+     JOIN customers c ON c.id = s.customer_id
+     JOIN devices d ON d.id = s.device_id
+     LEFT JOIN users u ON u.id = s.created_by_user_id
+     WHERE s.branch = @branch${filterSql}
+     ORDER BY s.id DESC`
+  ).all(params);
+
+  const tradeMap = new Map();
+  const trades = db.prepare(`SELECT ti.sale_id, ti.trade_in_value FROM trade_ins ti JOIN sales s ON s.id = ti.sale_id WHERE s.branch = @branch`).all({ branch: req.branch });
+  trades.forEach(t => tradeMap.set(t.sale_id, t.trade_in_value));
+
+  const csvRows = [];
+  csvRows.push(["Invoice", "Customer", "Phone", "Device", "Type", "Salesperson", "Sale Type", "Price", "Discount", "Trade-in", "Net", "Date", "Returned"].map(esc).join(","));
+  for (const r of rows) {
+    const tradeVal = tradeMap.get(r.id) || 0;
+    const net = Math.max(0, r.sale_price - r.discount) - tradeVal;
+    csvRows.push([
+      r.invoice_no, r.customer_name, r.customer_phone, r.device_model, r.product_type,
+      r.salesperson_name, r.sale_type, r.sale_price, r.discount, tradeVal, net,
+      (r.created_at || "").slice(0, 10), r.is_returned ? "Yes" : "No"
+    ].map(esc).join(","));
+  }
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", "attachment; filename=sales_" + todayIsoDate() + ".csv");
+  res.send("\uFEFF" + csvRows.join("\n"));
 });
 
 app.get("/sales/:id", requireAuth, (req, res) => {
@@ -1941,6 +2619,18 @@ app.get("/sales/:id", requireAuth, (req, res) => {
 
   if (!sale) return res.status(404).send("Sale not found");
 
+  // Fetch all sale items (cart)
+  const saleItems = db
+    .prepare(
+      `SELECT si.*, d.model, d.storage, d.color, d.condition, d.product_type,
+              (SELECT group_concat(di.imei, ', ') FROM device_imeis di WHERE di.device_id = d.id) AS imeis
+       FROM sale_items si
+       JOIN devices d ON d.id = si.device_id
+       WHERE si.sale_id = @sale_id
+       ORDER BY si.id`
+    )
+    .all({ sale_id: saleId });
+
   const plan = db.prepare(`SELECT * FROM installment_plans WHERE sale_id = @sale_id`).get({ sale_id: saleId });
   const payments = db.prepare(`SELECT * FROM payments WHERE sale_id = @sale_id ORDER BY id DESC`).all({ sale_id: saleId });
   const tradeIn = db
@@ -1955,12 +2645,23 @@ app.get("/sales/:id", requireAuth, (req, res) => {
 
   const returnRecord = db.prepare(`SELECT * FROM returns WHERE sale_id = @sale_id`).get({ sale_id: saleId });
 
+  let exchangeSale = null;
+  if (returnRecord && returnRecord.exchange_sale_id) {
+    exchangeSale = db.prepare(`
+      SELECT s.*, d.model AS device_model,
+             (SELECT group_concat(di.imei, ', ') FROM device_imeis di WHERE di.device_id = d.id) AS device_imeis
+      FROM sales s
+      JOIN devices d ON d.id = s.device_id
+      WHERE s.id = @id
+    `).get({ id: returnRecord.exchange_sale_id });
+  }
+
   const net = Math.max(0, sale.sale_price - sale.discount);
   const tradeValue = tradeIn ? tradeIn.trade_in_value : 0;
   const payable = Math.max(0, net - tradeValue);
 
   res.render("sales/detail", {
-    sale, plan, payments, tradeIn, returnRecord, currency, error: null,
+    sale, saleItems, plan, payments, tradeIn, returnRecord, exchangeSale, currency, error: null,
     net, tradeValue, payable
   });
 });
@@ -2042,7 +2743,7 @@ app.get("/sales/:id/return", requireAuth, (req, res) => {
   if (!sale) return res.status(404).send("Sale not found");
 
   const existingReturn = db.prepare(`SELECT * FROM returns WHERE sale_id = @sale_id`).get({ sale_id: saleId });
-  res.render("returns/new", { sale, existingReturn, error: null });
+  res.render("returns/new", { sale, existingReturn, error: null, form: null });
 });
 
 app.post("/sales/:id/return", requireAuth, (req, res) => {
@@ -2076,7 +2777,18 @@ app.post("/sales/:id/return", requireAuth, (req, res) => {
          WHERE s.id = @id`
       )
       .get({ id: saleId });
-    return res.status(400).render("returns/new", { sale: saleForRender, existingReturn, error: "Choose a return reason." });
+    return res.status(400).render("returns/new", {
+      sale: saleForRender,
+      existingReturn,
+      error: "Choose a return reason.",
+      form: {
+        reason: reason,
+        fault_description: faultDescription || "",
+        imei: imei || "",
+        refund_amount: (req.body.refund_amount || "").toString(),
+        notes: notes || ""
+      }
+    });
   }
 
   const tx = db.transaction(() => {
@@ -2129,6 +2841,146 @@ app.post("/sales/:id/return", requireAuth, (req, res) => {
   res.redirect(`/sales/${saleId}?returned=1`);
 });
 
+// ───────────── EXCHANGE ─────────────
+
+// GET /sales/:id/exchange — show exchange page (pick replacement device)
+app.get("/sales/:id/exchange", requireAuth, (req, res) => {
+  const saleId = Number(req.params.id);
+  const sale = db
+    .prepare(
+      `SELECT s.*,
+              c.name AS customer_name, c.phone AS customer_phone,
+              d.model AS device_model,
+              (SELECT group_concat(di.imei, ', ') FROM device_imeis di WHERE di.device_id = d.id) AS device_imeis
+       FROM sales s
+       JOIN customers c ON c.id = s.customer_id
+       JOIN devices d ON d.id = s.device_id
+       WHERE s.id = @id AND s.branch = @branch`
+    )
+    .get({ id: saleId, branch: req.branch });
+  if (!sale) return res.status(404).send("Sale not found");
+
+  const returnRecord = db.prepare(`SELECT * FROM returns WHERE sale_id = @sale_id`).get({ sale_id: saleId });
+  if (!returnRecord) return res.status(400).send("No return record found. Process the return first.");
+  if (returnRecord.exchange_sale_id) {
+    return res.redirect(`/sales/${returnRecord.exchange_sale_id}`);
+  }
+
+  const devices = db
+    .prepare(
+      `SELECT d.*, group_concat(di.imei, ', ') AS imeis
+       FROM devices d
+       LEFT JOIN device_imeis di ON di.device_id = d.id
+       WHERE d.branch = @branch AND d.status = 'InStock'
+       GROUP BY d.id
+       ORDER BY d.id DESC`
+    )
+    .all({ branch: req.branch });
+
+  res.render("sales/exchange", {
+    sale,
+    returnRecord,
+    devices,
+    currency,
+    error: null
+  });
+});
+
+// POST /sales/:id/exchange — create exchange sale
+app.post("/sales/:id/exchange", requireAuth, (req, res) => {
+  const saleId = Number(req.params.id);
+  const deviceId = Number(req.body.device_id);
+  const salePrice = moneyToInt(req.body.sale_price);
+
+  const sale = db
+    .prepare(
+      `SELECT s.*,
+              c.name AS customer_name, c.phone AS customer_phone,
+              c.id AS customer_id,
+              d.model AS device_model,
+              (SELECT group_concat(di.imei, ', ') FROM device_imeis di WHERE di.device_id = d.id) AS device_imeis
+       FROM sales s
+       JOIN customers c ON c.id = s.customer_id
+       JOIN devices d ON d.id = s.device_id
+       WHERE s.id = @id AND s.branch = @branch`
+    )
+    .get({ id: saleId, branch: req.branch });
+  if (!sale) return res.status(404).send("Sale not found");
+
+  const returnRecord = db.prepare(`SELECT * FROM returns WHERE sale_id = @sale_id`).get({ sale_id: saleId });
+  if (!returnRecord) return res.status(400).send("No return record. Process the return first.");
+  if (returnRecord.exchange_sale_id) {
+    return res.redirect(`/sales/${returnRecord.exchange_sale_id}`);
+  }
+
+  if (!deviceId || !salePrice) {
+    const devices = db
+      .prepare(`SELECT d.*, group_concat(di.imei, ', ') AS imeis FROM devices d LEFT JOIN device_imeis di ON di.device_id = d.id WHERE d.branch = @branch AND d.status = 'InStock' GROUP BY d.id ORDER BY d.id DESC`)
+      .all({ branch: req.branch });
+    return res.status(400).render("sales/exchange", {
+      sale, returnRecord, devices, currency,
+      error: "Select a replacement device."
+    });
+  }
+
+  const device = db.prepare(`SELECT * FROM devices WHERE id = @id AND branch = @branch AND status = 'InStock'`).get({ id: deviceId, branch: req.branch });
+  if (!device) {
+    const devices = db
+      .prepare(`SELECT d.*, group_concat(di.imei, ', ') AS imeis FROM devices d LEFT JOIN device_imeis di ON di.device_id = d.id WHERE d.branch = @branch AND d.status = 'InStock' GROUP BY d.id ORDER BY d.id DESC`)
+      .all({ branch: req.branch });
+    return res.status(400).render("sales/exchange", {
+      sale, returnRecord, devices, currency,
+      error: "That device is no longer in stock."
+    });
+  }
+
+  const invoiceNo = `INV-${Date.now()}`;
+
+  const tx = db.transaction(() => {
+    // Create the exchange sale
+    const saleIns = db
+      .prepare(
+        `INSERT INTO sales (branch, invoice_no, sale_type, customer_id, device_id, sale_price, discount, created_by_user_id, created_by_user_name, created_at)
+         VALUES (@branch, @invoice_no, @sale_type, @customer_id, @device_id, @sale_price, @discount, @created_by_user_id, @created_by_user_name, @created_at)`
+      )
+      .run({
+        branch: req.branch,
+        invoice_no: invoiceNo,
+        sale_type: "Exchange",
+        customer_id: sale.customer_id,
+        device_id: deviceId,
+        sale_price: salePrice,
+        discount: 0,
+        created_by_user_id: req.user.id,
+        created_by_user_name: req.user.name,
+        created_at: nowIso()
+      });
+
+    const exchangeSaleId = saleIns.lastInsertRowid;
+
+    // Insert sale_item
+    db.prepare(
+      `INSERT INTO sale_items (sale_id, device_id, unit_price, discount, created_at)
+       VALUES (@sale_id, @device_id, @unit_price, @discount, @created_at)`
+    ).run({
+      sale_id: exchangeSaleId,
+      device_id: deviceId,
+      unit_price: salePrice,
+      discount: 0,
+      created_at: nowIso()
+    });
+
+    // Mark replacement device as Sold
+    db.prepare(`UPDATE devices SET status = 'Sold' WHERE id = @id AND branch = @branch`).run({ id: deviceId, branch: req.branch });
+
+    // Link return to exchange sale
+    db.prepare(`UPDATE returns SET exchange_sale_id = @exchange_sale_id WHERE id = @id`).run({ exchange_sale_id: exchangeSaleId, id: returnRecord.id });
+  });
+
+  tx();
+  res.redirect(`/sales/${saleId}?returned=1&exchanged=1`);
+});
+
 app.post("/returns/:id/status", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const newStatus = String(req.body.status || "").trim();
@@ -2136,9 +2988,77 @@ app.post("/returns/:id/status", requireAdmin, (req, res) => {
   if (!validStatuses.includes(newStatus)) return res.status(400).send("Invalid status");
 
   const resolvedAt = newStatus === "Resolved" ? nowIso() : null;
-  db.prepare(`UPDATE returns SET status = @status, resolved_at = @resolved_at WHERE id = @id`).run({ status: newStatus, resolved_at: resolvedAt, id });
+  const tx = db.transaction(() => {
+    db.prepare(`UPDATE returns SET status = @status, resolved_at = @resolved_at WHERE id = @id`).run({ status: newStatus, resolved_at: resolvedAt, id });
+
+    // When resolved, put the device back in stock so it shows in sales search
+    if (newStatus === "Resolved") {
+      const ret = db.prepare(`SELECT device_id FROM returns WHERE id = @id`).get({ id });
+      if (ret && ret.device_id) {
+        db.prepare(`UPDATE devices SET status = 'InStock' WHERE id = @device_id`).run({ device_id: ret.device_id });
+      }
+    }
+  });
+  tx();
 
   res.redirect("/returns?ok=1");
+});
+
+app.post("/sales/:id/delete", requireAdmin, (req, res) => {
+  const saleId = Number(req.params.id);
+
+  const sale = db
+    .prepare(`SELECT s.*, d.id AS device_id FROM sales s JOIN devices d ON d.id = s.device_id WHERE s.id = @id AND s.branch = @branch`)
+    .get({ id: saleId, branch: req.branch });
+  if (!sale) return res.status(404).send("Sale not found");
+
+  const tx = db.transaction(() => {
+    // 1. Find and delete trade-in IMEIs and trade-in records
+    const tradeIns = db.prepare(`SELECT id, device_model FROM trade_ins WHERE sale_id = @sale_id`).all({ sale_id: saleId });
+    for (const ti of tradeIns) {
+      db.prepare(`DELETE FROM trade_in_imeis WHERE trade_in_id = @id`).run({ id: ti.id });
+    }
+    db.prepare(`DELETE FROM trade_ins WHERE sale_id = @sale_id`).run({ sale_id: saleId });
+
+    // 2. Find and delete any trade-in device that was created during swap (orphaned stock entry)
+    for (const ti of tradeIns) {
+      const tradeBatch = db.prepare(`SELECT id FROM stock_batches WHERE branch = @branch AND name = 'Trade-ins'`).get({ branch: req.branch });
+      if (tradeBatch) {
+        const orphanDevices = db.prepare(
+          `SELECT id FROM devices WHERE branch = @branch AND stock_batch_id = @batch_id AND model = @model AND status = 'InStock' ORDER BY id DESC LIMIT 1`
+        ).all({ branch: req.branch, batch_id: tradeBatch.id, model: ti.device_model });
+        for (const dev of orphanDevices) {
+          db.prepare(`DELETE FROM device_imeis WHERE device_id = @id`).run({ id: dev.id });
+          db.prepare(`DELETE FROM devices WHERE id = @id`).run({ id: dev.id });
+        }
+      }
+    }
+
+    // 3. Delete installment plan
+    db.prepare(`DELETE FROM installment_plans WHERE sale_id = @sale_id`).run({ sale_id: saleId });
+
+    // 4. Delete payments
+    db.prepare(`DELETE FROM payments WHERE sale_id = @sale_id`).run({ sale_id: saleId });
+
+    // 5. Delete returns
+    db.prepare(`DELETE FROM returns WHERE sale_id = @sale_id`).run({ sale_id: saleId });
+
+    // 6. Set all cart devices back to InStock
+    const allItems = db.prepare(`SELECT device_id FROM sale_items WHERE sale_id = @sale_id`).all({ sale_id: saleId });
+    for (const item of allItems) {
+      db.prepare(`UPDATE devices SET status = 'InStock' WHERE id = @device_id AND branch = @branch`).run({ device_id: item.device_id, branch: req.branch });
+    }
+
+    // 7. Delete the sale
+    db.prepare(`DELETE FROM sales WHERE id = @id AND branch = @branch`).run({ id: saleId, branch: req.branch });
+  });
+
+  try {
+    tx();
+    res.redirect("/sales?deleted=1");
+  } catch (e) {
+    res.status(400).send(String(e.message || e));
+  }
 });
 
 app.get("/installments", requireAuth, (req, res) => {
@@ -2175,12 +3095,105 @@ function substrDate(iso) {
   return (iso || "").slice(0, 10);
 }
 
+function getAllCustomers(branch) {
+  return db
+    .prepare(
+      `SELECT id, name, phone FROM customers WHERE branch = @branch AND (customer_type IS NULL OR customer_type = 'Customer') ORDER BY name ASC`
+    )
+    .all({ branch });
+}
 
-app.get("/credits", requireAdmin, (req, res) => {
-  const userRow = db.prepare("SELECT sms_credits, name FROM users WHERE id = @id").get({ id: req.user.id });
-  const smsCredits = userRow?.sms_credits || 0;
-  const userName = userRow?.name || "user";
-  res.render("credits", { smsCredits, userName });
+
+// Credits page — works for both Admin and Employee
+app.get("/credits", requireAuth, (req, res) => {
+  // Read credits from Ayisun shared Doticare pool
+  const smsCredits = getAyisunDoticareCredits();
+  const userName = req.user?.name || "user";
+  const isAdmin = req.user.role === "Admin";
+  const allUsers = isAdmin ? db.prepare("SELECT id, name, sms_credits FROM users ORDER BY name").all() : [];
+  
+  // Admin: get all pending requests | Employee: get own requests
+  const pendingRequests = isAdmin
+    ? db.prepare(`SELECT cr.id, cr.amount, cr.status, cr.created_at, u.name as user_name, u.id as user_id
+                  FROM credit_requests cr
+                  JOIN users u ON cr.user_id = u.id
+                  WHERE cr.status = 'pending'
+                  ORDER BY cr.created_at ASC`).all()
+    : db.prepare(`SELECT id, amount, status, created_at, fulfilled_at
+                  FROM credit_requests
+                  WHERE user_id = @uid
+                  ORDER BY created_at DESC
+                  LIMIT 5`).all({ uid: req.user.id });
+  
+  res.render("credits", { smsCredits, userName, allUsers, isAdmin, pendingRequests });
+});
+
+// Employee: Request airtime credits from admin
+app.post("/credits/request", requireAuth, (req, res) => {
+  const amount = Number(req.body.amount) || 0;
+  // Check if user already has a pending request
+  const existing = db.prepare("SELECT id FROM credit_requests WHERE user_id = @uid AND status = 'pending'").get({ uid: req.user.id });
+  if (existing) {
+    return res.json({ status: "error", message: "You already have a pending request. Please wait for admin to fulfill it." });
+  }
+  db.prepare("INSERT INTO credit_requests (user_id, amount, status) VALUES (@uid, @amount, 'pending')")
+    .run({ uid: req.user.id, amount: amount || null });
+  res.json({ status: "success", message: "Your airtime request has been sent to the admin." });
+});
+
+// Admin: Top up SMS credits for any user (deducts from Ayisun Doticare pool)
+app.post("/credits/topup", requireAdmin, (req, res) => {
+  const userId = Number(req.body.user_id);
+  const amount = Number(req.body.amount);
+  if (!userId || !amount || amount <= 0) {
+    return res.status(400).json({ status: "error", message: "Invalid user or amount" });
+  }
+  // Check Ayisun Doticare credit balance
+  const adminCredits = getAyisunDoticareCredits();
+  if (adminCredits < amount) {
+    return res.json({ status: "error", message: "Not enough credits in Ayisun Doticare pool! Available: " + adminCredits + ", needed: " + amount + ". Please buy credits from Ayisun first." });
+  }
+  // Deduct from Ayisun shared Doticare pool
+  deductAyisunDoticareCredits(amount);
+  // Add to employee's local credits
+  db.prepare("UPDATE users SET sms_credits = sms_credits + @amount WHERE id = @id").run({ amount, id: userId });
+  const updated = db.prepare("SELECT name, sms_credits FROM users WHERE id = @id").get({ id: userId });
+  const adminAfter = getAyisunDoticareCredits();
+  res.json({ status: "success", user: updated.name, credits_added: amount, new_balance: updated.sms_credits, admin_remaining: adminAfter });
+});
+
+// Admin: Fulfill a credit request (assign credits from Ayisun pool + mark fulfilled)
+app.post("/credits/fulfill/:id", requireAdmin, (req, res) => {
+  const requestId = Number(req.params.id);
+  const amount = Number(req.body.amount);
+  if (!requestId || !amount || amount <= 0) {
+    return res.status(400).json({ status: "error", message: "Invalid request or amount" });
+  }
+  const cr = db.prepare("SELECT * FROM credit_requests WHERE id = @id AND status = 'pending'").get({ id: requestId });
+  if (!cr) {
+    return res.status(404).json({ status: "error", message: "Request not found or already fulfilled." });
+  }
+  // Check Ayisun Doticare credit balance
+  const adminCredits = getAyisunDoticareCredits();
+  if (adminCredits < amount) {
+    return res.json({ status: "error", message: "Not enough credits in Ayisun Doticare pool! Available: " + adminCredits + ", needed: " + amount + ". Please buy credits from Ayisun first." });
+  }
+  // Deduct from Ayisun shared Doticare pool
+  deductAyisunDoticareCredits(amount);
+  // Add credits to the employee's local balance
+  db.prepare("UPDATE users SET sms_credits = sms_credits + @amount WHERE id = @id").run({ amount, id: cr.user_id });
+  // Mark request as fulfilled
+  db.prepare("UPDATE credit_requests SET status = 'fulfilled', amount = @amount, fulfilled_at = datetime('now'), fulfilled_by_user_id = @adminId WHERE id = @id")
+    .run({ amount, adminId: req.user.id, id: requestId });
+  const updated = db.prepare("SELECT name, sms_credits FROM users WHERE id = @id").get({ id: cr.user_id });
+  const adminAfter = getAyisunDoticareCredits();
+  res.json({ status: "success", user: updated.name, credits_added: amount, new_balance: updated.sms_credits, admin_remaining: adminAfter, request_id: requestId });
+});
+
+// API: Pending credit requests count (for dashboard badge)
+app.get("/api/credit-requests/pending-count", requireAuth, (req, res) => {
+  const count = db.prepare("SELECT COUNT(*) as cnt FROM credit_requests WHERE status = 'pending'").get().cnt;
+  res.json({ pending: count });
 });
 
 
@@ -2194,29 +3207,66 @@ app.post("/api/internal/add-credits", (req, res) => {
   if (!phone || !credits) {
     return res.status(400).json({ status: "error", message: "Missing phone or credits" });
   }
-  // Find user by phone/username
+  
+  // Update Ayisun's users.json (the shared Doticare credit pool)
+  addAyisunDoticareCredits(Number(credits));
+  
+  // Also update local SQLite for backward compatibility
   const norm = phone.toString().replace(/\+/g, "").trim();
   const user = db.prepare("SELECT id, sms_credits FROM users WHERE name LIKE @phone OR name = @phone2")
     .get({ phone: "%" + norm.slice(-9), phone2: norm });
-  if (!user) {
-    return res.status(404).json({ status: "error", message: "User not found" });
+  if (user) {
+    db.prepare("UPDATE users SET sms_credits = sms_credits + @credits WHERE id = @id")
+      .run({ credits: Number(credits), id: user.id });
   }
-  db.prepare("UPDATE users SET sms_credits = sms_credits + @credits WHERE id = @id")
-    .run({ credits: Number(credits), id: user.id });
-  const updated = db.prepare("SELECT sms_credits FROM users WHERE id = @id").get({ id: user.id });
-  res.json({ status: "success", phone, credits_added: Number(credits), new_balance: updated.sms_credits });
+  
+  const newBalance = getAyisunDoticareCredits();
+  res.json({ status: "success", phone, credits_added: Number(credits), new_balance: newBalance });
 });
 
 
-app.get("/sms", requireAdmin, (req, res) => {
-  const templates = db.prepare(`SELECT * FROM message_templates WHERE branch = @branch AND active = 1 ORDER BY id DESC`).all({ branch: req.branch });
+app.get("/sms", requireAuth, (req, res) => {
+  const templates = db.prepare(`SELECT * FROM message_templates WHERE branch = @branch ORDER BY use_count DESC, id DESC LIMIT 4`).all({ branch: req.branch });
   const filter = (req.query.filter || "overdue").toString();
-  const recipients = getRecipientsByFilter(filter, req.branch);
+  const view = (req.query.view || "installment").toString();
+
+  // Birthday customers for SMS center (always fetched for the top panel)
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  const bdayMonth = monthNames[now.getMonth()];
+  const bdayDay = now.getDate();
+  const birthdayCustomers = db.prepare(
+    `SELECT id, name, phone, birth_day, birth_month FROM customers
+     WHERE branch = @branch
+       AND birth_month = @todayMonth
+       AND birth_day = @todayDay`
+  ).all({ branch: req.branch, todayMonth: bdayMonth, todayDay: bdayDay });
+
+  let recipients;
+  if (view === "all") {
+    recipients = getAllCustomers(req.branch);
+  } else if (view === "birthday") {
+    recipients = birthdayCustomers;
+  } else if (view === "manual") {
+    recipients = db.prepare(
+      `SELECT id, phone, COALESCE(name, '') AS name, source_text, created_at FROM manual_contacts WHERE branch = @branch ORDER BY id DESC`
+    ).all({ branch: req.branch });
+  } else {
+    recipients = getRecipientsByFilter(filter, req.branch);
+  }
+
   const selectedTemplateId = req.query.template_id ? Number(req.query.template_id) : null;
-  const selectedTemplate = selectedTemplateId ? templates.find((t) => t.id === selectedTemplateId) : null;
+  let selectedTemplate = null;
+  if (selectedTemplateId) {
+    selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+    if (!selectedTemplate) {
+      selectedTemplate = db.prepare(`SELECT * FROM message_templates WHERE id = @id AND branch = @branch`).get({ id: selectedTemplateId, branch: req.branch });
+    }
+  }
   const message = selectedTemplate ? selectedTemplate.body : "";
-  const smsCredits = db.prepare("SELECT sms_credits FROM users WHERE id = @id").get({ id: req.user.id })?.sms_credits || 0;
-  res.render("sms/center", { templates, recipients, filter, senderId: getSenderId(), error: null, selectedTemplateId, message, smsCredits });
+  const smsCredits = getAyisunDoticareCredits();
+
+  res.render("sms/center", { templates, recipients, filter, view, senderId: getSenderId(), error: null, selectedTemplateId, message, smsCredits, birthdayCustomers });
 });
 
 function getRecipientsByFilter(filter, branch) {
@@ -2265,50 +3315,74 @@ function getRecipientsByFilter(filter, branch) {
     .map((r) => ({ ...r, due_date_short: substrDate(r.due_date), status: "Overdue" }));
 }
 
-app.post("/sms/send", requireAdmin, async (req, res) => {
-  const { message, template_id, save_as_template, template_name, filter } = req.body;
-  const recipients = getRecipientsByFilter((filter || "overdue").toString(), req.branch);
+app.post("/sms/send", requireAuth, async (req, res) => {
+  const { message, template_id, save_as_template, template_name, filter, view } = req.body;
+  const viewType = (view || "installment").toString();
+  let recipients;
+  if (viewType === "all") {
+    recipients = getAllCustomers(req.branch);
+  } else if (viewType === "birthday") {
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const now = new Date();
+    recipients = db.prepare(
+      `SELECT id, name, phone FROM customers
+       WHERE branch = @branch
+         AND birth_month = @todayMonth
+         AND birth_day = @todayDay`
+    ).all({ branch: req.branch, todayMonth: monthNames[now.getMonth()], todayDay: now.getDate() });
+  } else if (viewType === "manual") {
+    recipients = db.prepare(
+      `SELECT id, phone, COALESCE(name, '') AS name FROM manual_contacts WHERE branch = @branch ORDER BY id DESC`
+    ).all({ branch: req.branch });
+  } else {
+    recipients = getRecipientsByFilter((filter || "overdue").toString(), req.branch);
+  }
   const selected = Array.isArray(req.body.recipient) ? req.body.recipient : req.body.recipient ? [req.body.recipient] : [];
   const pasteNumbers = Array.isArray(req.body.paste_recipient) ? req.body.paste_recipient : req.body.paste_recipient ? [req.body.paste_recipient] : [];
 
   const templateId = template_id ? Number(template_id) : null;
   const template = templateId
-    ? db.prepare(`SELECT * FROM message_templates WHERE id = @id AND branch = @branch AND active = 1`).get({ id: templateId, branch: req.branch })
+    ? db.prepare(`SELECT * FROM message_templates WHERE id = @id AND branch = @branch`).get({ id: templateId, branch: req.branch })
     : null;
   const body = ((message || "").toString().trim() || (template ? template.body : "")).trim();
 
-  const templates = db.prepare(`SELECT * FROM message_templates WHERE branch = @branch AND active = 1 ORDER BY id DESC`).all({ branch: req.branch });
+  const templates = db.prepare(`SELECT * FROM message_templates WHERE branch = @branch ORDER BY use_count DESC, id DESC LIMIT 4`).all({ branch: req.branch });
   if (!body) {
+    const smsCredits = getAyisunDoticareCredits();
     return res.status(400).render("sms/center", {
       templates,
       recipients,
       filter,
+      view: viewType,
       senderId: getSenderId(),
       error: "Type a message.",
       selectedTemplateId: templateId,
-      message: ""
+      message: "",
+      smsCredits
     });
   }
   if (selected.length === 0 && pasteNumbers.length === 0) {
+    const smsCredits = getAyisunDoticareCredits();
     return res.status(400).render("sms/center", {
       templates,
       recipients,
       filter,
+      view: viewType,
       senderId: getSenderId(),
       error: "Pick at least 1 recipient or paste contacts.",
       selectedTemplateId: templateId,
-      message: body
+      message: body,
+      smsCredits
     });
   }
 
-  // Check SMS credits
-  const user = db.prepare("SELECT sms_credits FROM users WHERE id = @id").get({ id: req.user.id });
-  const availableCredits = user ? (user.sms_credits || 0) : 0;
+  // Check SMS credits — read from Ayisun shared Doticare pool
+  const availableCredits = getAyisunDoticareCredits();
   const neededCredits = selected.length + pasteNumbers.length;
   if (availableCredits < neededCredits) {
     return res.status(400).render("sms/center", {
-      templates, recipients, filter, senderId: getSenderId(),
-      error: "Insufficient SMS credits. You have " + availableCredits + " but need " + neededCredits + ". Buy more credits.",
+      templates, recipients, filter, view: viewType, senderId: getSenderId(),
+      error: "Not enough SMS credit. You have " + availableCredits + " credit" + (availableCredits === 1 ? "" : "s") + " but you are trying to send to " + neededCredits + " number" + (neededCredits === 1 ? "" : "s") + ". You need " + (neededCredits - availableCredits) + " more credit" + ((neededCredits - availableCredits) === 1 ? "" : "s") + ". Please buy credits from Ayisun.",
       selectedTemplateId: templateId, message: body, smsCredits: availableCredits
     });
   }
@@ -2321,24 +3395,30 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
       if (name) {
         const ins = db
           .prepare(
-            `INSERT INTO message_templates (branch, name, body, active, created_by_user_id, created_at)
-             VALUES (@branch, @name, @body, 1, @created_by_user_id, @created_at)`
+            `INSERT INTO message_templates (branch, name, body, active, use_count, created_by_user_id, created_at)
+             VALUES (@branch, @name, @body, 1, 1, @created_by_user_id, @created_at)`
           )
           .run({ branch: req.branch, name, body, created_by_user_id: req.user.id, created_at: nowIso() });
         savedTemplateId = ins.lastInsertRowid;
       }
     }
 
-    //  Debtor recipients
+    // Increment use_count for the template used
+    if (savedTemplateId) {
+      db.prepare(`UPDATE message_templates SET use_count = use_count + 1 WHERE id = @id`).run({ id: savedTemplateId });
+    }
+
+    //  Debtor / All-customer recipients
     const recipientSet = new Set(selected.map((s) => Number(s)));
     for (const r of recipients) {
-      if (!recipientSet.has(r.sale_id)) continue;
+      const recipientId = (viewType === "installment") ? r.sale_id : r.id;
+      if (!recipientSet.has(recipientId)) continue;
       const id = enqueueSms({
         toPhone: r.phone,
         body,
         branch: req.branch,
-        customerId: r.customer_id,
-        saleId: r.sale_id,
+        customerId: (viewType === "installment") ? r.customer_id : (viewType === "manual" ? null : r.id),
+        saleId: (viewType === "installment") ? r.sale_id : null,
         templateId: savedTemplateId,
         createdByUserId: req.user.id
       });
@@ -2366,15 +3446,38 @@ app.post("/sms/send", requireAdmin, async (req, res) => {
   if (queuedIds.length > 0) {
     await deliverBulkMessages(queuedIds);
   }
-  // Deduct credits
+  // Deduct credits from Ayisun shared Doticare pool
   if (queuedIds.length > 0) {
-    db.prepare("UPDATE users SET sms_credits = MAX(0, sms_credits - @used) WHERE id = @id")
-      .run({ used: queuedIds.length, id: req.user.id });
+    deductAyisunDoticareCredits(queuedIds.length);
   }
+
+  // Save paste numbers that are NOT customers to manual_contacts
+  if (pasteNumbers.length > 0) {
+    const upsertContact = db.prepare(
+      `INSERT OR IGNORE INTO manual_contacts (branch, phone, created_by_user_id, created_at)
+       VALUES (@branch, @phone, @uid, @now)`
+    );
+    for (const phone of pasteNumbers) {
+      const clean = String(phone).trim();
+      if (!clean || clean.length < 10) continue;
+      const digits = clean.replace(/\D/g, '');
+      // Normalize: convert 233 prefix to 0 (Ghana local format) to match DB
+      const digits0 = digits.replace(/^233/, '0');
+      const digits233 = digits.replace(/^0/, '233');
+      // Check if this phone belongs to a customer (try both 0xxx and 233xxx formats)
+      const isCustomer = db.prepare(
+        `SELECT 1 FROM customers WHERE branch = @branch AND (REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', '') = @digits0 OR REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', '') = @digits233)`
+      ).get({ branch: req.branch, digits0, digits233 });
+      if (!isCustomer) {
+        upsertContact.run({ branch: req.branch, phone: clean, uid: req.user.id, now: nowIso() });
+      }
+    }
+  }
+
   res.redirect("/sms/logs?sent=" + queuedIds.length);
 });
 
-app.post("/sms/logs/retry/:id", requireAdmin, async (req, res) => {
+app.post("/sms/logs/retry/:id", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const row = db.prepare(`SELECT * FROM sms_messages WHERE id = @id`).get({ id });
   if (!row) return res.status(404).send("Not found");
@@ -2389,13 +3492,13 @@ app.post("/sms/logs/retry/:id", requireAdmin, async (req, res) => {
   res.redirect("/sms/logs?retried=1");
 });
 
-app.post("/sms/logs/delete/:id", requireAdmin, (req, res) => {
+app.post("/sms/logs/delete/:id", requireAuth, (req, res) => {
   const id = Number(req.params.id);
   db.prepare(`DELETE FROM sms_messages WHERE id = @id AND status IN ('Retry', 'Queued')`).run({ id });
   res.redirect("/sms/logs?deleted=1");
 });
 
-app.post("/sms/logs/retry-all", requireAdmin, async (req, res) => {
+app.post("/sms/logs/retry-all", requireAuth, async (req, res) => {
   const rows = db.prepare(`SELECT id FROM sms_messages WHERE status = 'Retry' ORDER BY id`).all();
   const ids = rows.map((r) => r.id);
   if (ids.length > 0) {
@@ -2405,12 +3508,12 @@ app.post("/sms/logs/retry-all", requireAdmin, async (req, res) => {
   res.redirect(`/sms/logs?retried=${ids.length}`);
 });
 
-app.get("/sms/templates", requireAdmin, (req, res) => {
+app.get("/sms/templates", requireAuth, (req, res) => {
   const templates = db.prepare(`SELECT * FROM message_templates WHERE branch = @branch ORDER BY id DESC`).all({ branch: req.branch });
   res.render("sms/templates", { templates });
 });
 
-app.post("/sms/templates/:id/toggle", requireAdmin, (req, res) => {
+app.post("/sms/templates/:id/toggle", requireAuth, (req, res) => {
   const id = Number(req.params.id);
   const t = db.prepare(`SELECT * FROM message_templates WHERE id = @id AND branch = @branch`).get({ id, branch: req.branch });
   if (!t) return res.redirect("/sms/templates");
@@ -2422,7 +3525,18 @@ app.post("/sms/templates/:id/toggle", requireAdmin, (req, res) => {
   res.redirect("/sms/templates");
 });
 
-app.get("/sms/logs", requireAdmin, (req, res) => {
+app.post("/sms/templates/:id/delete", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const t = db.prepare(`SELECT * FROM message_templates WHERE id = @id AND branch = @branch`).get({ id, branch: req.branch });
+  if (!t) return res.redirect("/sms/templates");
+  // Clear template reference from all SMS messages that used this template
+  db.prepare(`UPDATE sms_messages SET template_id = NULL WHERE template_id = @id AND branch = @branch`).run({ id, branch: req.branch });
+  // Now safe to delete the template
+  db.prepare(`DELETE FROM message_templates WHERE id = @id AND branch = @branch`).run({ id, branch: req.branch });
+  res.redirect("/sms/templates");
+});
+
+app.get("/sms/logs", requireAuth, (req, res) => {
   const logs = db
     .prepare(
       `SELECT sm.*, c.name AS customer_name, s.invoice_no
@@ -2436,6 +3550,40 @@ app.get("/sms/logs", requireAdmin, (req, res) => {
     .all({ branch: req.branch });
   res.render("sms/logs", { logs, query: req.query });
 });
+
+// ── CSV EXPORTS ──────────────────────────────────────────────
+app.get("/inventory/export", requireAuth, (req, res) => {
+  const rows = db.prepare(
+    `SELECT d.model, d.storage, d.color, d.product_type, d.os, d.sale_price,
+            SUM(CASE WHEN d.status = 'InStock' OR d.status = 'Returned' THEN 1 ELSE 0 END) as in_stock,
+            SUM(CASE WHEN d.status = 'Sold' THEN 1 ELSE 0 END) as sold
+     FROM devices d
+     WHERE d.branch = @branch
+     GROUP BY d.model, d.storage, d.sale_price
+     ORDER BY d.model, d.storage`
+  ).all({ branch: req.branch });
+
+  const csvRows = [];
+  csvRows.push(["Model", "Storage", "Color", "Type", "OS", "Price", "In Stock", "Sold"].map(esc).join(","));
+  for (const r of rows) {
+    csvRows.push([
+      r.model, r.storage || "", r.color || "", r.product_type || "", r.os || "",
+      r.sale_price, r.in_stock, r.sold
+    ].map(esc).join(","));
+  }
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", "attachment; filename=inventory_" + todayIsoDate() + ".csv");
+  res.send("\uFEFF" + csvRows.join("\n"));
+});
+
+function esc(v) {
+  const s = String(v ?? "");
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3000;
 app.listen(port, () => {

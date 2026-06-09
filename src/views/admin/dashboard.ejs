@@ -1,14 +1,36 @@
 <%- include("../partials/head", { title: "Admin Dashboard" }) %>
 <%- include("../partials/nav") %>
 
+<% if (typeof birthdayCustomers !== "undefined" && birthdayCustomers.length > 0) { %>
+<div style="background:#fce7f3;border:2px solid #ec4899;border-radius:12px;padding:16px 20px;margin-bottom:20px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+    <span style="font-size:24px;">🎂</span>
+    <strong style="color:#9d174d;font-size:16px;">Birthday<%= birthdayCustomers.length > 1 ? 's' : '' %> Today!</strong>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:12px;">
+    <% birthdayCustomers.forEach(function(c) { %>
+      <div style="background:#fdf2f8;border:1px solid #f9a8d4;border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:20px;">🎈</span>
+        <div>
+          <strong style="color:#831843;"><%= c.name %></strong>
+          <span style="color:#be185d;font-size:12px;display:block;"><%= c.phone %></span>
+        </div>
+        <a href="/sms?phone=<%= c.phone %>" style="background:#ec4899;color:#fff;padding:4px 10px;border-radius:6px;text-decoration:none;font-size:12px;white-space:nowrap;">Send SMS</a>
+      </div>
+    <% }); %>
+  </div>
+</div>
+<% } %>
+
 <div class="row">
   <div>
-    <h1>Admin Dashboard</h1>
+    <h1>Quick Add Stock</h1>
     <% if (currentBranch) { %>
       <div class="muted">Managing <%= currentBranch.name %> as an independent shop.</div>
     <% } %>
   </div>
   <div class="row-actions">
+    <a class="btn" href="/dashboard">📊 Full Dashboard</a>
     <a class="btn" href="/admin/bulk">+ Bulk Stock</a>
     <a class="btn secondary" href="/admin/users">Manage Users</a>
     <a class="btn secondary" href="/inventory">View Inventory</a>
@@ -32,7 +54,7 @@
       <div class="grid">
         <label>
           Model *
-          <input name="model" required />
+          <input name="model" required value="<%= (form && form.model) || '' %>" />
         </label>
         <label>
           Stock Batch / Lot
@@ -40,35 +62,50 @@
         </label>
         <label>
           Storage
-          <input name="storage" placeholder="e.g. 128GB" />
+          <input name="storage" placeholder="e.g. 128GB" value="<%= (form && form.storage) || '' %>" />
         </label>
         <label>
           Color
-          <input name="color" placeholder="e.g. Black" />
+          <input name="color" placeholder="e.g. Black" value="<%= (form && form.color) || '' %>" />
         </label>
         <label>
           Condition *
           <select name="condition" required>
             <option value="">Select</option>
-            <option>New</option>
-            <option>Used</option>
+            <option<%= (form && form.condition === 'New') ? ' selected' : '' %>>New</option>
+            <option<%= (form && form.condition === 'Used') ? ' selected' : '' %>>Used</option>
+          </select>
+        </label>
+        <label>
+          Type
+          <select name="product_type">
+            <option value="Phone"<%= (form && form.product_type === 'Phone') ? ' selected' : '' %>>Phone</option>
+            <option value="Accessory"<%= (form && form.product_type === 'Accessory') ? ' selected' : '' %>>Accessory</option>
+          </select>
+        </label>
+        <label>
+          OS
+          <select name="os">
+            <option value=""<%= (form && form.os === '') ? ' selected' : '' %>>-</option>
+            <option value="iOS"<%= (form && form.os === 'iOS') ? ' selected' : '' %>>iOS</option>
+            <option value="Android"<%= (form && form.os === 'Android') ? ' selected' : '' %>>Android</option>
           </select>
         </label>
         <label>
           Cost Price (&#8373;) *
-          <input name="cost_price" type="number" min="0" required />
+          <input name="cost_price" type="number" min="0" required value="<%= (form && form.cost_price) || '' %>" />
         </label>
         <label>
           Sale Price (&#8373;) *
-          <input name="sale_price" type="number" min="0" required />
+          <input name="sale_price" type="number" min="0" required value="<%= (form && form.sale_price) || '' %>" />
         </label>
         <label>
           IMEI 1 *
-          <input name="imei1" required />
+          <input name="imei1" required value="<%= (form && form.imei1) || '' %>" />
         </label>
         <label>
           IMEI 2
-          <input name="imei2" />
+          <input name="imei2" value="<%= (form && form.imei2) || '' %>" />
         </label>
       </div>
       <datalist id="stockBatches">
@@ -109,6 +146,11 @@
             <td><a class="btn small secondary" href="/inventory/<%= d.id %>/edit">Edit</a></td>
           </tr>
         <% } %>
+      <% if (recentStock.length === 0) { %>
+        <tr>
+          <td colspan="8" style="text-align:center;padding:30px;color:#9ca3af;">No stock added yet. Use the form on the left to add your first product.</td>
+        </tr>
+      <% } %>
       </tbody>
     </table>
   </div>

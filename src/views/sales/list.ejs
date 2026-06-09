@@ -3,8 +3,58 @@
 
 <div class="row">
   <h1>Sales</h1>
-  <a class="btn" href="/sales/new">New Sale</a>
+  <div style="display:flex;gap:8px;">
+    <a class="btn<%= typeof filterToday !== "undefined" && !filterToday && !fromDate && !toDate && !searchMonth && !searchCustomer ? " primary" : "" %>" href="/sales">📋 All</a>
+    <a class="btn<%= typeof filterToday !== "undefined" && filterToday ? " primary" : "" %>" href="/sales?today=1">📅 Today</a>
+    <a class="btn" href="/sales/new">New Sale</a>
+    <a class="btn<%= !showReturned ? " primary" : "" %>" href="/sales">✅ Active Sales</a>
+    <a class="btn<%= showReturned ? " danger" : "" %>" href="/sales?show_returned=1">↩ Returned Sales</a>
+    <a class="btn" style="background:#059669;color:#fff;" href="/sales/export?<%= typeof filterToday !== 'undefined' && filterToday ? 'today=1&' : '' %><%= typeof fromDate !== 'undefined' && fromDate ? 'from=' + encodeURIComponent(fromDate) + '&' : '' %><%= typeof toDate !== 'undefined' && toDate ? 'to=' + encodeURIComponent(toDate) + '&' : '' %><%= typeof searchMonth !== 'undefined' && searchMonth ? 'month=' + encodeURIComponent(searchMonth) + '&' : '' %><%= typeof searchCustomer !== 'undefined' && searchCustomer ? 'customer=' + encodeURIComponent(searchCustomer) + '&' : '' %><%= typeof searchSalesperson !== 'undefined' && searchSalesperson ? 'salesperson=' + encodeURIComponent(searchSalesperson) + '&' : '' %><%= typeof showReturned !== 'undefined' && showReturned ? 'show_returned=1&' : '' %>">📥 Export CSV</a>
+  </div>
 </div>
+
+<form class="card" method="get" action="/sales" style="margin-bottom:16px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+  <div style="display:flex;flex-direction:column;gap:4px;">
+    <label style="font-size:12px;font-weight:600;color:#666;">From</label>
+    <input type="date" name="from" value="<%= typeof fromDate !== 'undefined' ? fromDate : '' %>" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;" />
+  </div>
+  <div style="display:flex;flex-direction:column;gap:4px;">
+    <label style="font-size:12px;font-weight:600;color:#666;">To</label>
+    <input type="date" name="to" value="<%= typeof toDate !== 'undefined' ? toDate : '' %>" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;" />
+  </div>
+  <div style="display:flex;flex-direction:column;gap:4px;">
+    <label style="font-size:12px;font-weight:600;color:#666;">Month</label>
+    <select name="month" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;">
+      <option value="">Any</option>
+      <%
+        var now = new Date();
+        for (var m = 0; m < 12; m++) {
+          var d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+          var val = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+          var label = d.toLocaleString("default", { month: "long", year: "numeric" });
+      %>
+        <option value="<%= val %>" <%= searchMonth === val ? "selected" : "" %>><%= label %></option>
+      <% } %>
+    </select>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:4px;">
+    <label style="font-size:12px;font-weight:600;color:#666;">Customer</label>
+    <input type="text" name="customer" value="<%= typeof searchCustomer !== 'undefined' ? searchCustomer : '' %>" placeholder="Name…" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;width:140px;" />
+  </div>
+  <div style="display:flex;flex-direction:column;gap:4px;">
+    <label style="font-size:12px;font-weight:600;color:#666;">Salesperson</label>
+    <select name="salesperson" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;">
+      <option value="">All</option>
+      <% if (typeof salesUsers !== 'undefined') { for (const uname of salesUsers) { %>
+        <option value="<%= uname %>" <%= searchSalesperson === uname ? "selected" : "" %>><%= uname %></option>
+      <% }} %>
+    </select>
+  </div>
+  <div style="display:flex;gap:6px;">
+    <button type="submit" class="btn primary">🔍 Search</button>
+    <a class="btn secondary" href="/sales">✕ Clear</a>
+  </div>
+</form>
 
 <table class="table">
   <thead>
@@ -21,7 +71,7 @@
   </thead>
   <tbody>
     <% for (const s of sales) { %>
-      <tr>
+      <tr<%= s.is_returned ? ' style="border-left:4px solid #dc2626;background:#fff5f5;"' : '' %>>
         <td class="mono"><%= s.invoice_no %></td>
         <td><%= s.customer_name %></td>
         <td><%= s.device_model %></td>
@@ -34,14 +84,47 @@
                 : s.sale_type;
           const typePill = s.sale_type.includes("Installment") ? "warn" : "ok";
         %>
-        <td><span class="pill <%= typePill %>"><%= typeLabel %></span></td>
+        <td><span class="pill <%= typePill %>"><%= typeLabel %></span><% if (s.is_returned) { %> <span class="pill danger">↩ Returned</span><% } %></td>
         <td><%= s.salesperson_name || "Unknown" %></td>
         <td>&#8373; <%= currency(s.payable ?? Math.max(0, s.sale_price - s.discount)) %></td>
         <td><%= (s.created_at || "").slice(0, 10) %></td>
-        <td><a class="btn small secondary" href="/sales/<%= s.id %>">View</a></td>
+        <td><a class="btn small secondary" href="/sales/<%= s.id %>">View</a><% if (currentUser && currentUser.role === 'Admin') { %> <form method="post" action="/sales/<%= s.id %>/delete" style="display:inline;" onsubmit="return confirm('Delete this sale? Device will go back to InStock.')"><button class="btn small danger" type="submit">Delete</button></form><% } %></td>
+      </tr>
+    <% } %>
+    <% if (sales.length === 0) { %>
+      <tr>
+        <td colspan="8" style="text-align:center;padding:40px;color:#9ca3af;">
+          <% if (filterToday || fromDate || toDate || searchMonth || searchCustomer) { %>
+            No sales match your filters. Try changing the date range or customer name.
+          <% } else { %>
+            No sales recorded yet.
+          <% } %>
+        </td>
       </tr>
     <% } %>
   </tbody>
 </table>
+
+<% if (typeof totalPages !== 'undefined' && totalPages > 1) { %>
+<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:24px;padding:16px 0;border-top:1px solid #e5e7eb;">
+  <%
+    var pageUrl = function(p) {
+      var qs = [];
+      if (typeof filterToday !== 'undefined' && filterToday) qs.push('today=1');
+      if (typeof fromDate !== 'undefined' && fromDate) qs.push('from=' + encodeURIComponent(fromDate));
+      if (typeof toDate !== 'undefined' && toDate) qs.push('to=' + encodeURIComponent(toDate));
+      if (typeof searchMonth !== 'undefined' && searchMonth) qs.push('month=' + encodeURIComponent(searchMonth));
+      if (typeof searchCustomer !== 'undefined' && searchCustomer) qs.push('customer=' + encodeURIComponent(searchCustomer));
+      if (typeof searchSalesperson !== 'undefined' && searchSalesperson) qs.push('salesperson=' + encodeURIComponent(searchSalesperson));
+      if (typeof showReturned !== 'undefined' && showReturned) qs.push('show_returned=1');
+      qs.push('page=' + p);
+      return '?' + qs.join('&');
+    };
+  %>
+  <% if (page > 1) { %><a class="btn small" href="<%= pageUrl(page - 1) %>">← Previous</a><% } else { %><span class="btn small" style="opacity:0.4;pointer-events:none;">← Previous</span><% } %>
+  <span style="font-size:14px;color:#666;">Page <%= page %> of <%= totalPages %> (Showing <%= (page-1)*perPage+1 %>–<%= Math.min(page*perPage, totalCount) %> of <%= totalCount %>)</span>
+  <% if (page < totalPages) { %><a class="btn small" href="<%= pageUrl(page + 1) %>">Next →</a><% } else { %><span class="btn small" style="opacity:0.4;pointer-events:none;">Next →</span><% } %>
+</div>
+<% } %>
 
 <%- include("../partials/foot") %>

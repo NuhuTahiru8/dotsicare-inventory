@@ -7,7 +7,7 @@
     <div class="muted">Add multiple devices at once with one click.</div>
   </div>
   <div class="row-actions">
-    <a class="btn secondary" href="/admin">Back</a>
+    <a class="btn secondary" href="/dashboard">Back to Dashboard</a>
     <a class="btn secondary" href="/inventory">Inventory</a>
   </div>
 </div>
@@ -87,6 +87,8 @@
           <th>Model *</th>
           <th>Storage</th>
           <th>Color</th>
+          <th style="width: 90px;">Type</th>
+          <th style="width: 90px;">OS</th>
           <th style="width: 100px;">Condition</th>
           <th>Cost &#8373;</th>
           <th>Sale &#8373;</th>
@@ -145,6 +147,8 @@
       '<td><input name="row[' + idx + '][model]" class="bulk-input" placeholder="iPhone 15 Pro Max" list="datalistModels" value="' + (modelVal || '').replace(/"/g, '&quot;') + '" /></td>' +
       '<td><input name="row[' + idx + '][storage]" class="bulk-input" placeholder="256GB" list="datalistStorages" value="' + (storageVal || '').replace(/"/g, '&quot;') + '" /></td>' +
       '<td><input name="row[' + idx + '][color]" class="bulk-input" placeholder="Black" list="datalistColors" value="' + (colorVal || '').replace(/"/g, '&quot;') + '" /></td>' +
+      '<td><select name="row[' + idx + '][product_type]" class="bulk-input"><option value="Phone">Phone</option><option value="Accessory">Accessory</option></select></td>' +
+      '<td><select name="row[' + idx + '][os]" class="bulk-input"><option value="">-</option><option>iOS</option><option>Android</option></select></td>' +
       '<td><select name="row[' + idx + '][condition]" class="bulk-input"><option value="">-</option><option' + (condVal === "New" ? ' selected' : '') + '>New</option><option' + (condVal === "Used" ? ' selected' : '') + '>Used</option></select></td>' +
       '<td><input name="row[' + idx + '][cost_price]" class="bulk-input" type="number" min="0" placeholder="5000" value="' + (costVal || '') + '" /></td>' +
       '<td><input name="row[' + idx + '][sale_price]" class="bulk-input" type="number" min="0" placeholder="6500" value="' + (saleVal || '') + '" /></td>' +
@@ -227,8 +231,28 @@
 
   addBtn.addEventListener("click", addRow);
 
-  // Start with one empty row
-  addRow();
+  // Start with saved rows if re-rendered after error, otherwise one empty row
+  <% if (typeof formRows !== 'undefined' && formRows.length) { %>
+    var savedRows = <%- JSON.stringify(formRows) %>;
+    savedRows.forEach(function (r) {
+      makeRow(r.model, r.color, r.storage, r.cost_price, r.sale_price, r.condition);
+      // Now fill the rest of the fields that makeRow doesn't set
+      var rows = tbody.querySelectorAll(".bulk-row");
+      var lastRow = rows[rows.length - 1];
+      if (lastRow) {
+        var inputs = lastRow.querySelectorAll("input, select");
+        // Fields order: model, storage, color, product_type, os, condition, cost_price, sale_price, imei1, imei2
+        if (inputs[3]) inputs[3].value = r.product_type || "Phone";
+        if (inputs[4]) inputs[4].value = r.os || "";
+        if (inputs[7]) inputs[7].value = r.sale_price || "";
+        if (inputs[8]) inputs[8].value = r.imei1 || "";
+        if (inputs[9]) inputs[9].value = r.imei2 || "";
+      }
+    });
+    updateNumbers();
+  <% } else { %>
+    addRow();
+  <% } %>
 })();
 </script>
 

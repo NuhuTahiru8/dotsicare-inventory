@@ -39,36 +39,28 @@
       Return Reason *
       <select name="reason" required>
         <option value="">-- select --</option>
-        <option value="Faulty Speaker">Faulty Speaker</option>
-        <option value="Faulty Screen">Faulty Screen</option>
-        <option value="Faulty Battery">Faulty Battery</option>
-        <option value="Faulty Camera">Faulty Camera</option>
-        <option value="Faulty Charging Port">Faulty Charging Port</option>
-        <option value="Network Issue">Network Issue</option>
-        <option value="Software Issue">Software Issue</option>
-        <option value="Water Damage">Water Damage</option>
-        <option value="Warranty Claim">Warranty Claim</option>
-        <option value="Wrong Item">Wrong Item</option>
-        <option value="Customer Changed Mind">Customer Changed Mind</option>
-        <option value="Other">Other</option>
+        <% const reasons = ["Faulty Speaker","Faulty Screen","Faulty Battery","Faulty Camera","Faulty Charging Port","Network Issue","Software Issue","Water Damage","Warranty Claim","Wrong Item","Customer Changed Mind","Other"]; %>
+        <% for (const r of reasons) { %>
+          <option value="<%= r %>" <%= (form && form.reason === r) ? 'selected' : '' %>><%= r %></option>
+        <% } %>
       </select>
     </label>
     <label>
       IMEI of Returned Device
-      <input name="imei" placeholder="Last 4 digits" class="mono" />
+      <input name="imei" placeholder="Last 4 digits" class="mono" value="<%= (form && form.imei) || sale.device_imeis || '' %>" />
     </label>
     <label class="span-2">
       Fault Description
-      <textarea name="fault_description" rows="3" placeholder="Describe what went wrong e.g. Speaker crackles at high volume, screen flickers when charging..."></textarea>
+      <textarea name="fault_description" rows="3" placeholder="Describe what went wrong e.g. Speaker crackles at high volume, screen flickers when charging..."><%= (form && form.fault_description) || '' %></textarea>
     </label>
     <label>
       Refund Amount (&#8373;)
-      <input name="refund_amount" type="number" min="0" placeholder="0" />
+      <input name="refund_amount" type="number" min="0" placeholder="0" value="<%= (form && form.refund_amount) || sale.sale_price || '' %>" />
       <span class="muted">Leave 0 if no refund yet</span>
     </label>
     <label class="span-2">
       Notes
-      <textarea name="notes" rows="2" placeholder="Any extra info..."></textarea>
+      <textarea name="notes" rows="2" placeholder="Any extra info..."><%= (form && form.notes) || '' %></textarea>
     </label>
   </div>
   <button class="btn danger" type="submit" style="margin-top: 12px;">Confirm Return</button>

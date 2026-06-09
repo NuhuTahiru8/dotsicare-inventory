@@ -24,23 +24,23 @@
 
   <div id="inStockDetail" style="display:none;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px;">
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
-      <div style="text-align:center;padding:16px;background:#f0fdf4;border-radius:10px;">
+      <div class="type-filter-box in-stock-box" onclick="event.stopPropagation();filterByType('inStock','iOS')" data-type="iOS" style="text-align:center;padding:16px;background:#f0fdf4;border-radius:10px;cursor:pointer;border:2px solid transparent;transition:all .15s;">
         <div style="font-size:28px;font-weight:800;color:#15803d;"><%= inStock.iOS %></div>
         <div style="font-size:13px;color:#16a34a;font-weight:600;">iOS</div>
       </div>
-      <div style="text-align:center;padding:16px;background:#f0fdf4;border-radius:10px;">
+      <div class="type-filter-box in-stock-box" onclick="event.stopPropagation();filterByType('inStock','Android')" data-type="Android" style="text-align:center;padding:16px;background:#f0fdf4;border-radius:10px;cursor:pointer;border:2px solid transparent;transition:all .15s;">
         <div style="font-size:28px;font-weight:800;color:#15803d;"><%= inStock.Android %></div>
         <div style="font-size:13px;color:#16a34a;font-weight:600;">Android</div>
       </div>
-      <div style="text-align:center;padding:16px;background:#f0fdf4;border-radius:10px;">
+      <div class="type-filter-box in-stock-box" onclick="event.stopPropagation();filterByType('inStock','Accessory')" data-type="Accessory" style="text-align:center;padding:16px;background:#f0fdf4;border-radius:10px;cursor:pointer;border:2px solid transparent;transition:all .15s;">
         <div style="font-size:28px;font-weight:800;color:#15803d;"><%= inStock.Accessory %></div>
         <div style="font-size:13px;color:#16a34a;font-weight:600;">Accessories</div>
       </div>
     </div>
-    <h3 style="font-size:15px;color:#333;margin-bottom:8px;">Per Model</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
+    <h3 style="font-size:15px;color:#333;margin-bottom:8px;" id="inStockModelTitle">Per Model</h3>
+    <div id="inStockModelGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
       <% Object.keys(inStock.byModel).sort().forEach(function(k) { %>
-        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;">
+        <div class="model-item" data-key="<%= k %>" data-type="<%= inStock.byModelType[k] || 'Other' %>" style="display:flex;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;">
           <span style="font-weight:600;"><%= k %></span>
           <span style="font-weight:800;color:#0f2d62;"><%= inStock.byModel[k] %></span>
         </div>
@@ -61,23 +61,23 @@
 
   <div id="soldDetail" style="display:none;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;">
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
-      <div style="text-align:center;padding:16px;background:#fef2f2;border-radius:10px;">
+      <div class="type-filter-box sold-box" onclick="event.stopPropagation();filterByType('sold','iOS')" data-type="iOS" style="text-align:center;padding:16px;background:#fef2f2;border-radius:10px;cursor:pointer;border:2px solid transparent;transition:all .15s;">
         <div style="font-size:28px;font-weight:800;color:#b91c1c;"><%= sold.iOS %></div>
         <div style="font-size:13px;color:#dc2626;font-weight:600;">iOS</div>
       </div>
-      <div style="text-align:center;padding:16px;background:#fef2f2;border-radius:10px;">
+      <div class="type-filter-box sold-box" onclick="event.stopPropagation();filterByType('sold','Android')" data-type="Android" style="text-align:center;padding:16px;background:#fef2f2;border-radius:10px;cursor:pointer;border:2px solid transparent;transition:all .15s;">
         <div style="font-size:28px;font-weight:800;color:#b91c1c;"><%= sold.Android %></div>
         <div style="font-size:13px;color:#dc2626;font-weight:600;">Android</div>
       </div>
-      <div style="text-align:center;padding:16px;background:#fef2f2;border-radius:10px;">
+      <div class="type-filter-box sold-box" onclick="event.stopPropagation();filterByType('sold','Accessory')" data-type="Accessory" style="text-align:center;padding:16px;background:#fef2f2;border-radius:10px;cursor:pointer;border:2px solid transparent;transition:all .15s;">
         <div style="font-size:28px;font-weight:800;color:#b91c1c;"><%= sold.Accessory %></div>
         <div style="font-size:13px;color:#dc2626;font-weight:600;">Accessories</div>
       </div>
     </div>
-    <h3 style="font-size:15px;color:#333;margin-bottom:8px;">Per Model</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
+    <h3 style="font-size:15px;color:#333;margin-bottom:8px;" id="soldModelTitle">Per Model</h3>
+    <div id="soldModelGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
       <% Object.keys(sold.byModel).sort().forEach(function(k) { %>
-        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;">
+        <div class="model-item" data-key="<%= k %>" data-type="<%= sold.byModelType[k] || 'Other' %>" style="display:flex;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;">
           <span style="font-weight:600;"><%= k %></span>
           <span style="font-weight:800;color:#dc2626;"><%= sold.byModel[k] %></span>
         </div>
@@ -88,10 +88,58 @@
 </div>
 
 <script>
+var activeFilter = { inStock: null, sold: null };
+
 function toggleSection(id) {
   var el = document.getElementById(id);
   el.style.display = el.style.display === "none" ? "block" : "none";
 }
+
+function filterByType(section, type) {
+  // toggle: if already selected, deselect
+  if (activeFilter[section] === type) {
+    activeFilter[section] = null;
+  } else {
+    activeFilter[section] = type;
+  }
+
+  var gridId = section === "inStock" ? "inStockModelGrid" : "soldModelGrid";
+  var titleId = section === "inStock" ? "inStockModelTitle" : "soldModelTitle";
+  var boxClass = section === "inStock" ? ".in-stock-box" : ".sold-box";
+
+  // update box highlights
+  document.querySelectorAll(boxClass).forEach(function(b) {
+    if (activeFilter[section] && b.getAttribute("data-type") === activeFilter[section]) {
+      b.style.borderColor = section === "inStock" ? "#22c55e" : "#ef4444";
+      b.style.transform = "scale(1.04)";
+      b.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+    } else {
+      b.style.borderColor = "transparent";
+      b.style.transform = "scale(1)";
+      b.style.boxShadow = "none";
+    }
+  });
+
+  // update title
+  var title = document.getElementById(titleId);
+  if (activeFilter[section]) {
+    title.textContent = "Per Model — " + activeFilter[section] + " only";
+  } else {
+    title.textContent = "Per Model";
+  }
+
+  // filter model items
+  var items = document.querySelectorAll("#" + gridId + " .model-item");
+  items.forEach(function(item) {
+    var itemType = item.getAttribute("data-type");
+    if (!activeFilter[section] || itemType === activeFilter[section]) {
+      item.style.display = "";
+    } else {
+      item.style.display = "none";
+    }
+  });
+}
+
 // Open inStock by default
-document.getElementById("inStockDetail").style.display = "block";
+toggleSection("inStockDetail");
 </script>

@@ -23,21 +23,14 @@
   <div class="alert"><%= error %></div>
 <% } %>
 
+
+
 <form class="form" method="post" action="/sms/send" id="smsForm">
+  <input type="hidden" name="view" value="<%= locals.view || 'installment' %>" />
   <div class="grid">
     <label>
       Sender ID
       <input readonly value="<%= senderId %>" class="mono" />
-    </label>
-
-    <label>
-      Use Template
-      <select name="template_id" id="templateSelect" onchange="applyTemplate()">
-        <option value="">None</option>
-        <% for (const t of templates) { %>
-          <option value="<%= t.id %>" data-body="<%= t.body.replace(/"/g, '&quot;').replace(/"/g, '&quot;') %>" <%= selectedTemplateId === t.id ? "selected" : "" %>><%= t.name %></option>
-        <% } %>
-      </select>
     </label>
 
     <label class="span-2">
@@ -89,22 +82,106 @@
     <div class="hint" style="margin-top: 8px;">Numbers that start with <strong>233</strong>, <strong>05</strong>, <strong>02</strong>, <strong>05</strong>, <strong>054</strong>, <strong>055</strong>, <strong>059</strong>, <strong>026</strong>, <strong>027</strong>, <strong>024</strong>, <strong>020</strong> are kept. Foreign numbers are removed. Duplicates are merged.</div>
   </div>
 
-  <!--  INSTALLMENT CUSTOMERS TABLE  -->
+  <!--  CUSTOMERS TABLE  -->
   <div class="panel">
     <div class="row">
-      <h2>Installment Customers (<%= recipients.length %>)</h2>
+      <h2><%= (locals.view === "all") ? "All Customers" : (locals.view === "birthday") ? "Birthday Customers 🎂" : (locals.view === "manual") ? "Manual Contacts 📋" : "Installment Customers" %> (<%= recipients.length %>)</h2>
       <div class="row-actions">
         <label>
+          View
+          <select name="viewSelect" onchange="location.href='/sms?view='+encodeURIComponent(this.value)+'&filter='+encodeURIComponent('<%= locals.filter || "overdue" %>')">
+            <option value="installment" <%= locals.view === "installment" ? "selected" : "" %>>Installment Customers</option>
+            <option value="all" <%= locals.view === "all" ? "selected" : "" %>>All Customers</option>
+            <option value="birthday" <%= locals.view === "birthday" ? "selected" : "" %>>Birthday 🎂</option>
+            <option value="manual" <%= locals.view === "manual" ? "selected" : "" %>>Manual Contacts 📋</option>
+          </select>
+        </label>
+        <% if (locals.view === "installment") { %>
+        <label>
           Filter
-          <select name="filter" onchange="location.href='/sms?filter='+encodeURIComponent(this.value)+'&template_id='+encodeURIComponent(document.getElementById('templateSelect').value||'')">
+          <select name="filter" onchange="location.href='/sms?view=installment&filter='+encodeURIComponent(this.value)">
             <option value="overdue" <%= filter === "overdue" ? "selected" : "" %>>Overdue</option>
             <option value="due-soon" <%= filter === "due-soon" ? "selected" : "" %>>Due Soon</option>
             <option value="all-active" <%= filter === "all-active" ? "selected" : "" %>>All Active</option>
           </select>
         </label>
+        <% } %>
       </div>
     </div>
 
+    <% if (locals.view === "birthday") { %>
+    <table class="table compact">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="selectAllCustomers" /></th>
+          <th>Customer</th>
+          <th>Phone</th>
+          <th>Birthday</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const r of recipients) { %>
+          <tr>
+            <td><input type="checkbox" name="recipient" value="<%= r.id %>" class="customer-check" checked /></td>
+            <td><strong><%= r.name %></strong> 🎈</td>
+            <td class="mono"><%= r.phone %></td>
+            <td><%= r.birth_day %> <%= r.birth_month %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+    <% if (recipients.length === 0) { %>
+      <p style="text-align:center;color:#9ca3af;padding:20px;">No customers celebrating their birthday today.</p>
+    <% } %>
+    <% } else if (locals.view === "all") { %>
+    <table class="table compact">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="selectAllCustomers" /></th>
+          <th>Customer</th>
+          <th>Phone</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const r of recipients) { %>
+          <tr>
+            <td><input type="checkbox" name="recipient" value="<%= r.id %>" class="customer-check" /></td>
+            <td><%= r.name %></td>
+            <td class="mono"><%= r.phone %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+    <% if (recipients.length === 0) { %>
+      <p style="text-align:center;color:#9ca3af;padding:20px;">No customers found.</p>
+    <% } %>
+    <% } else if (locals.view === "manual") { %>
+    <table class="table compact">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="selectAllCustomers" /></th>
+          <th>Phone</th>
+          <th>Name</th>
+          <th>Source</th>
+          <th>Added</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const r of recipients) { %>
+          <tr>
+            <td><input type="checkbox" name="recipient" value="<%= r.id %>" class="customer-check" checked /></td>
+            <td class="mono"><%= r.phone %></td>
+            <td><%= r.name || '-' %></td>
+            <td class="muted" style="font-size:12px;"><%= (r.source_text || '').slice(0, 40) %></td>
+            <td class="muted" style="font-size:12px;"><%= (r.created_at || '').slice(0, 10) %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+    <% if (recipients.length === 0) { %>
+      <p style="text-align:center;color:#9ca3af;padding:20px;">No manual contacts saved yet. When you send SMS to numbers that are not customers, they'll appear here.</p>
+    <% } %>
+    <% } else { %>
     <table class="table compact">
       <thead>
         <tr>
@@ -131,6 +208,10 @@
         <% } %>
       </tbody>
     </table>
+    <% if (recipients.length === 0) { %>
+      <p style="text-align:center;color:#9ca3af;padding:20px;">No installment customers found for this filter.</p>
+    <% } %>
+    <% } %>
   </div>
 
   <div class="panel">
@@ -152,19 +233,8 @@
 </form>
 
 <script>
-function applyTemplate() {
-  var sel = document.getElementById("templateSelect");
-  var idx = sel.selectedIndex;
-  if (idx > 0) {
-    var body = sel.options[idx].getAttribute("data-body");
-    document.getElementById("msgText").value = body || "";
-  }
-}
-
 function fillTemplate(body) {
   document.getElementById("msgText").value = body;
-  // also reset the dropdown to "None" since filling was done by button click
-  document.getElementById("templateSelect").selectedIndex = 0;
 }
 
 //  Paste area logic

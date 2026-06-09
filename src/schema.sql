@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL,
   password_salt TEXT,
   password_hash TEXT,
+  password TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -29,6 +30,8 @@ CREATE TABLE IF NOT EXISTS devices (
   cost_price INTEGER NOT NULL,
   sale_price INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'InStock',
+  product_type TEXT NOT NULL DEFAULT 'Phone',
+  os TEXT,
   created_by_user_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (stock_batch_id) REFERENCES stock_batches(id)
@@ -90,6 +93,17 @@ CREATE TABLE IF NOT EXISTS sales (
   created_by_user_name TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (customer_id) REFERENCES customers(id),
+  FOREIGN KEY (device_id) REFERENCES devices(id)
+);
+
+CREATE TABLE IF NOT EXISTS sale_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sale_id INTEGER NOT NULL,
+  device_id INTEGER NOT NULL,
+  unit_price INTEGER NOT NULL,
+  discount INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
   FOREIGN KEY (device_id) REFERENCES devices(id)
 );
 
@@ -158,8 +172,10 @@ CREATE TABLE IF NOT EXISTS returns (
   created_by_user_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   resolved_at TEXT,
+  exchange_sale_id INTEGER,
   FOREIGN KEY (sale_id) REFERENCES sales(id),
-  FOREIGN KEY (device_id) REFERENCES devices(id)
+  FOREIGN KEY (device_id) REFERENCES devices(id),
+  FOREIGN KEY (exchange_sale_id) REFERENCES sales(id)
 );
 
 CREATE TABLE IF NOT EXISTS sms_messages (
@@ -180,4 +196,27 @@ CREATE TABLE IF NOT EXISTS sms_messages (
   FOREIGN KEY (customer_id) REFERENCES customers(id),
   FOREIGN KEY (sale_id) REFERENCES sales(id),
   FOREIGN KEY (template_id) REFERENCES message_templates(id)
+);
+
+CREATE TABLE IF NOT EXISTS credit_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  amount INTEGER,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  fulfilled_at TEXT,
+  fulfilled_by_user_id INTEGER,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (fulfilled_by_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS manual_contacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  branch TEXT NOT NULL DEFAULT 'Konongo',
+  phone TEXT NOT NULL,
+  name TEXT,
+  source_text TEXT,
+  created_by_user_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(branch, phone)
 );

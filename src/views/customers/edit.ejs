@@ -16,32 +16,50 @@
       Type *
       <div style="display: flex; gap: 10px; margin-top: 4px;">
         <label class="inline" style="margin-bottom: 0;">
-          <input type="radio" name="customer_type" value="Customer" <%= customer.customer_type === "Customer" ? "checked" : "" %> onchange="toggleDealer()" /> Customer
+          <input type="radio" name="customer_type" value="Customer" <%= error && form ? (form.customer_type === "Customer" ? "checked" : "") : (customer.customer_type === "Customer" ? "checked" : "") %> onchange="toggleDealer()" /> Customer
         </label>
         <label class="inline" style="margin-bottom: 0;">
-          <input type="radio" name="customer_type" value="Dealer" <%= customer.customer_type === "Dealer" ? "checked" : "" %> onchange="toggleDealer()" /> Dealer (Bulk Buyer)
+          <input type="radio" name="customer_type" value="Dealer" <%= error && form ? (form.customer_type === "Dealer" ? "checked" : "") : (customer.customer_type === "Dealer" ? "checked" : "") %> onchange="toggleDealer()" /> Dealer (Bulk Buyer)
         </label>
       </div>
     </label>
     <label>
       Full Name *
-      <input name="name" required value="<%= customer.name %>" placeholder="Full name" />
+      <input name="name" required value="<%= error && form ? (form.name || '') : customer.name %>" placeholder="Full name" />
     </label>
     <label>
       Phone *
-      <input name="phone" required value="<%= customer.phone %>" placeholder="020XXXXXXXX" />
+      <input name="phone" required value="<%= error && form ? (form.phone || '') : customer.phone %>" placeholder="020XXXXXXXX" />
     </label>
     <label>
       Ghana Card Number
-      <input name="ghana_card" value="<%= customer.ghana_card || "" %>" placeholder="GHA-XXXXXXXXX-X" class="mono" />
+      <input name="ghana_card" value="<%= error && form ? (form.ghana_card || '') : (customer.ghana_card || '') %>" placeholder="GHA-XXXXXXXXX-X" class="mono" />
     </label>
     <label>
       Address
-      <input name="address" value="<%= customer.address || "" %>" placeholder="Konongo, Ashanti" />
+      <input name="address" value="<%= error && form ? (form.address || '') : (customer.address || '') %>" placeholder="Konongo, Ashanti" />
+    </label>
+    <label>
+      Birthday (Day)
+      <select name="birth_day">
+        <option value="">-- Day --</option>
+        <% for (var d = 1; d <= 31; d++) { %>
+          <option value="<%= d %>" <%= (error && form ? (form.birth_day == d) : (customer.birth_day == d)) ? 'selected' : '' %>><%= d %></option>
+        <% } %>
+      </select>
+    </label>
+    <label>
+      Birthday (Month)
+      <select name="birth_month">
+        <option value="">-- Month --</option>
+        <% ['January','February','March','April','May','June','July','August','September','October','November','December'].forEach(function(m) { %>
+          <option value="<%= m %>" <%= (error && form ? (form.birth_month === m) : (customer.birth_month === m)) ? 'selected' : '' %>><%= m %></option>
+        <% }); %>
+      </select>
     </label>
     <div id="dealerFields">
       <label>
-        <input type="checkbox" name="id_held" value="1" <%= customer.id_held ? "checked" : "" %> /> Hold Ghana Card
+        <input type="checkbox" name="id_held" value="1" <%= error && form ? (form.id_held ? "checked" : "") : (customer.id_held ? "checked" : "") %> /> Hold Ghana Card
         <span class="hint">Check if dealer is paying later (installment).</span>
       </label>
     </div>

@@ -3,7 +3,7 @@
 
 <div class="row">
   <h1>User Management</h1>
-  <a class="btn secondary" href="/admin">Back</a>
+  <a class="btn secondary" href="/dashboard">Back to Dashboard</a>
 </div>
 
 <% if (message) { %>
@@ -23,14 +23,22 @@
       <div class="grid">
         <label>
           Username *
-          <input name="name" required />
+          <input name="name" required value="<%= (form && form.name) || '' %>" />
         </label>
         <label>
           Role *
-          <select name="role" required>
+          <select name="role" id="roleSelect" required onchange="document.getElementById('branchRow').style.display = this.value === 'Employee' ? '' : 'none'">
             <option value="">Select</option>
-            <option>Employee</option>
-            <option>Admin</option>
+            <option<%= (form && form.role === 'Employee') ? ' selected' : '' %>>Employee</option>
+            <option<%= (form && form.role === 'Admin') ? ' selected' : '' %>>Admin</option>
+          </select>
+        </label>
+        <label id="branchRow" style="display:<%= (form && form.role === 'Employee') ? '' : 'none' %>">
+          Branch (Employee) *
+          <select name="employee_branch">
+            <% for (const branch of branches) { %>
+              <option value="<%= branch.key %>"<%= (form && form.employee_branch === branch.key) ? ' selected' : '' %>><%= branch.name %></option>
+            <% } %>
           </select>
         </label>
         <label class="span-2">
@@ -50,6 +58,7 @@
           <th>ID</th>
           <th>Username</th>
           <th>Role</th>
+          <th>Branch</th>
           <th>Sales</th>
           <th>Created</th>
           <th>Actions</th>
@@ -61,10 +70,12 @@
             <td><%= u.id %></td>
             <td><%= u.name %></td>
             <td><span class="pill <%= u.role === "Admin" ? "ok" : "muted" %>"><%= u.role %></span></td>
+            <td><%= u.branch || "—" %></td>
             <td><%= u.sale_count || 0 %></td>
             <td><%= (u.created_at || "").slice(0, 10) %></td>
             <td>
               <div class="table-actions">
+                <button class="btn small secondary" type="button" onclick="toggleEdit(<%= u.id %>)">Edit</button>
                 <form class="form-inline compact" method="post" action="/admin/users/<%= u.id %>/password">
                   <input name="password" type="password" minlength="6" placeholder="New password" required />
                   <button class="btn small secondary" type="submit">Change Password</button>
@@ -75,10 +86,53 @@
               </div>
             </td>
           </tr>
+          <tr id="editRow<%= u.id %>" style="display:none;">
+            <td colspan="7" style="padding:14px;background:rgba(0,122,255,0.03);">
+              <form class="form-inline" method="post" action="/admin/users/<%= u.id %>/edit" style="gap:10px;">
+                <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;">
+                  Name
+                  <input name="name" value="<%= u.name %>" required style="width:160px;min-height:36px;" />
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;">
+                  Role
+                  <select name="role" style="width:130px;min-height:36px;">
+                    <option <%= u.role === "Admin" ? "selected" : "" %>>Admin</option>
+                    <option <%= u.role === "Employee" ? "selected" : "" %>>Employee</option>
+                  </select>
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;">
+                  Branch
+                  <select name="employee_branch" style="width:140px;min-height:36px;">
+                    <option value="">—</option>
+                    <% for (const branch of branches) { %>
+                      <option value="<%= branch.key %>" <%= u.branch === branch.key ? "selected" : "" %>><%= branch.name %></option>
+                    <% } %>
+                  </select>
+                </label>
+                <button class="btn small primary" type="submit">Save</button>
+                <button class="btn small secondary" type="button" onclick="toggleEdit(<%= u.id %>)">Cancel</button>
+              </form>
+            </td>
+          </tr>
         <% } %>
+      <% if (users.length === 0) { %>
+        <tr>
+          <td colspan="7" style="text-align:center;padding:30px;color:#9ca3af;">No users created yet. Add an employee or admin above.</td>
+        </tr>
+      <% } %>
       </tbody>
     </table>
   </div>
 </div>
 
 <%- include("../partials/foot") %>
+<script>
+function toggleEdit(id) {
+  var row = document.getElementById('editRow' + id);
+  if (row.style.display === 'none' || row.style.display === '') {
+    row.style.display = '';
+  } else {
+    row.style.display = 'none';
+  }
+}
+</script>

@@ -38,11 +38,42 @@
         <div><dt>Notes</dt><dd><%= returnRecord.notes %></dd></div>
       <% } %>
       <div><dt>Date</dt><dd><%= (returnRecord.created_at || "").slice(0, 10) %></dd></div>
+      <% if (returnRecord.exchange_sale_id) { %>
+        <div><dt>Exchange</dt><dd><a href="/sales/<%= returnRecord.exchange_sale_id %>" class="btn small">View Exchange Sale #<%= returnRecord.exchange_sale_id %></a></dd></div>
+      <% } else { %>
+        <div style="margin-top:12px;">
+          <a class="btn ok" href="/sales/<%= sale.id %>/exchange">Exchange This Item</a>
+        </div>
+      <% } %>
     </dl>
   </div>
 <% } %>
 
 <!-- PRINTABLE RECEIPT -->
+<%
+  // Group identical items (model + price + discount) to save paper
+  const printGroups = {};
+  const printOrder = [];
+  for (var pi = 0; pi < saleItems.length; pi++) {
+    var psi = saleItems[pi];
+    var key = psi.model + '||' + psi.unit_price + '||' + (psi.discount || 0);
+    if (!printGroups[key]) {
+      printGroups[key] = {
+        model: psi.model,
+        unit_price: psi.unit_price,
+        discount: (psi.discount || 0),
+        storage: psi.storage,
+        color: psi.color,
+        condition: psi.condition,
+        qty: 0,
+        imeis: []
+      };
+      printOrder.push(key);
+    }
+    printGroups[key].qty++;
+    if (psi.imeis) printGroups[key].imeis.push(psi.imeis);
+  }
+%>
 <div class="print-receipt">
   <div class="print-receipt-header">
     <strong class="print-shop-name">DOT'S iCARE</strong>
@@ -54,12 +85,28 @@
 
   <table class="print-table">
     <tr><td class="print-dt">Customer</td><td><%= sale.customer_name %> &mdash; <%= sale.customer_phone %></td></tr>
-    <tr><td class="print-dt">Device</td><td><%= sale.device_model %> (<%= sale.device_imeis || "" %>)</td></tr>
     <tr><td class="print-dt">Type</td><td><%= typeLabel %></td></tr>
-    <tr><td class="print-dt">Sale Price</td><td>&#8373; <%= currency(sale.sale_price) %></td></tr>
-    <% if (Number(sale.discount) > 0) { %>
-      <tr><td class="print-dt">Discount</td><td>&#8373; <%= currency(sale.discount) %></td></tr>
+    <tr><td class="print-dt">Items</td><td><%= saleItems.length %> item(s)</td></tr>
+  </table>
+
+  <strong class="print-section">Items</strong>
+  <table class="print-table">
+    <thead class="print-thead"><tr><th>#</th><th>Device</th><th>Qty</th><th>Details</th><th>Price</th><th>Disc</th><th>Subtotal</th></tr></thead>
+    <% for (var gi = 0; gi < printOrder.length; gi++) { var si = printGroups[printOrder[gi]]; %>
+      <tr>
+        <td><%= gi + 1 %></td>
+        <td><%= si.model %></td>
+        <td><%= si.qty %></td>
+        <td style="font-size:11px;"><%= [si.storage, si.color, si.condition].filter(Boolean).join(' / ') %> <%= si.imeis.length ? ' | ' + si.imeis.join(', ') : '' %></td>
+        <td>&#8373; <%= currency(si.unit_price) %></td>
+        <td>&#8373; <%= currency(si.discount) %></td>
+        <td><strong>&#8373; <%= currency(Math.max(0, si.unit_price - si.discount) * si.qty) %></strong></td>
+      </tr>
     <% } %>
+    <tr><td colspan="4"></td><td>&#8373; <%= currency(sale.sale_price) %></td><td>&#8373; <%= currency(sale.discount) %></td><td><strong>&#8373; <%= currency(net) %></strong></td></tr>
+  </table>
+
+  <table class="print-table">
     <% if (tradeValue > 0) { %>
       <tr><td class="print-dt">Trade-in Value</td><td>&#8373; <%= currency(tradeValue) %></td></tr>
     <% } %>
@@ -92,6 +139,41 @@
     </table>
   <% } %>
 
+  <% if (sale.is_returned && returnRecord) { %>
+    <hr class="print-hr" />
+    <strong class="print-section">Return</strong>
+    <table class="print-table">
+      <tr><td class="print-dt">Reason</td><td><%= returnRecord.reason %></td></tr>
+      <tr><td class="print-dt">IMEI</td><td class="mono"><%= returnRecord.imei || "-" %></td></tr>
+      <tr><td class="print-dt">Refund</td><td>&#8373; <%= currency(returnRecord.refund_amount) %></td></tr>
+      <tr><td class="print-dt">Date</td><td><%= (returnRecord.created_at || "").slice(0, 10) %></td></tr>
+    </table>
+    <% if (exchangeSale) { %>
+      <% const exchBalance = returnRecord.refund_amount - exchangeSale.sale_price; %>
+      <strong class="print-section">Exchange</strong>
+      <table class="print-table">
+        <tr><td class="print-dt">Device</td><td><%= exchangeSale.device_model %></td></tr>
+        <tr><td class="print-dt">IMEI</td><td class="mono"><%= exchangeSale.device_imeis || "-" %></td></tr>
+        <tr><td class="print-dt">Price</td><td>&#8373; <%= currency(exchangeSale.sale_price) %></td></tr>
+        <tr><td class="print-dt">Invoice</td><td><%= exchangeSale.invoice_no %></td></tr>
+      </table>
+      <table class="print-table">
+        <tr>
+          <td class="print-dt">Balance</td>
+          <td>
+            <% if (exchBalance > 0) { %>
+              Customer receives &#8373; <%= currency(exchBalance) %>
+            <% } else if (exchBalance < 0) { %>
+              Customer pays &#8373; <%= currency(Math.abs(exchBalance)) %>
+            <% } else { %>
+              Even exchange (no balance)
+            <% } %>
+          </td>
+        </tr>
+      </table>
+    <% } %>
+  <% } %>
+
   <hr class="print-hr" />
   <div class="print-footer">
     <span>Thank you for your purchase!</span>
@@ -105,16 +187,43 @@
     <h2>Sale</h2>
     <dl class="dl">
       <div><dt>Customer</dt><dd><%= sale.customer_name %> (<span class="mono"><%= sale.customer_phone %></span>)</dd></div>
-      <div><dt>Device</dt><dd><%= sale.device_model %></dd></div>
-      <div><dt>IMEI</dt><dd class="mono"><%= sale.device_imeis || "-" %></dd></div>
       <div><dt>Type</dt><dd><%= typeLabel %></dd></div>
-      <div><dt>Sale</dt><dd>&#8373; <%= currency(sale.sale_price) %></dd></div>
+      <div><dt>Items</dt><dd><%= saleItems.length %> device(s)</dd></div>
+      <div><dt>Sale Total</dt><dd>&#8373; <%= currency(sale.sale_price) %></dd></div>
       <div><dt>Discount</dt><dd>&#8373; <%= currency(sale.discount) %></dd></div>
       <div><dt>Trade-in Value</dt><dd>&#8373; <%= currency(tradeValue || 0) %></dd></div>
       <div><dt>Payable</dt><dd>&#8373; <%= currency(payable) %></dd></div>
       <div><dt>Date</dt><dd><%= (sale.created_at || "").slice(0, 10) %></dd></div>
       <div><dt>Sold By</dt><dd><%= sale.salesperson_name || "Unknown" %></dd></div>
     </dl>
+  </div>
+
+  <div class="panel">
+    <h2>Items (<%= saleItems.length %>)</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Device</th>
+          <th>Details</th>
+          <th>Price (₵)</th>
+          <th>Discount (₵)</th>
+          <th>Subtotal (₵)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (var idx = 0; idx < saleItems.length; idx++) { var si = saleItems[idx]; %>
+          <tr>
+            <td><%= idx + 1 %></td>
+            <td><b><%= si.model %></b></td>
+            <td style="font-size:12px;color:var(--muted);"><%= [si.storage, si.color, si.condition].filter(Boolean).join(' / ') %><% if (si.imeis) { %><br><span class="mono"><%= si.imeis %></span><% } %></td>
+            <td>&#8373; <%= currency(si.unit_price) %></td>
+            <td><% if (si.discount > 0) { %><span style="color:#dc2626;">&#8373; <%= currency(si.discount) %></span><% } else { %>0<% } %></td>
+            <td style="font-weight:600;color:#16a34a;">&#8373; <%= currency(Math.max(0, si.unit_price - (si.discount || 0))) %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
   </div>
 
   <div class="panel">

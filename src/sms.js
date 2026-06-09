@@ -1,4 +1,62 @@
 import { db, nowIso } from "./db.js";
+import fs from "node:fs";
+
+const AYISUN_USERS_PATH = "/opt/businesshelpy/app/users.json";
+
+function readAyisunUsers() {
+  const raw = fs.readFileSync(AYISUN_USERS_PATH, "utf-8");
+  return JSON.parse(raw);
+}
+
+function writeAyisunUsers(data) {
+  fs.writeFileSync(AYISUN_USERS_PATH, JSON.stringify(data, null, 2), "utf-8");
+}
+
+/** Get Doticare user's SMS credit balance from Ayisun's users.json (case-insensitive match) */
+export function getAyisunDoticareCredits() {
+  try {
+    const data = readAyisunUsers();
+    const users = data.users || {};
+    const key = Object.keys(users).find(k => k.toLowerCase() === "doticare");
+    if (!key) return 0;
+    return users[key].sms_credits || 0;
+  } catch (e) {
+    console.error("Failed to read Ayisun credits:", e.message);
+    return 0;
+  }
+}
+
+/** Deduct credits from Doticare user in Ayisun's users.json */
+export function deductAyisunDoticareCredits(amount) {
+  try {
+    const data = readAyisunUsers();
+    const users = data.users || {};
+    const key = Object.keys(users).find(k => k.toLowerCase() === "doticare");
+    if (!key) return false;
+    users[key].sms_credits = Math.max(0, (users[key].sms_credits || 0) - amount);
+    writeAyisunUsers(data);
+    return true;
+  } catch (e) {
+    console.error("Failed to deduct Ayisun credits:", e.message);
+    return false;
+  }
+}
+
+/** Add credits to Doticare user in Ayisun's users.json (called after Paystack payment) */
+export function addAyisunDoticareCredits(amount) {
+  try {
+    const data = readAyisunUsers();
+    const users = data.users || {};
+    const key = Object.keys(users).find(k => k.toLowerCase() === "doticare");
+    if (!key) return false;
+    users[key].sms_credits = (users[key].sms_credits || 0) + amount;
+    writeAyisunUsers(data);
+    return true;
+  } catch (e) {
+    console.error("Failed to add Ayisun credits:", e.message);
+    return false;
+  }
+}
 
 export function getSenderId() {
   return (process.env.SMS_SENDER_ID || "Doticare").toString();

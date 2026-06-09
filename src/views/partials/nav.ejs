@@ -1,6 +1,6 @@
 <header class="topbar">
   <div class="container topbar-inner">
-    <a class="brand" href="<%= currentUser ? "/dashboard" : "/" %>">
+    <a class="brand" href="<%= currentUser ? (currentUser.role === 'Employee' ? '/sales' : '/dashboard') : '/' %>">
       <span class="brand-mark">
         <img class="brand-logo" src="/public/logo.png" alt="DOT'S iCARE logo" />
       </span>
@@ -13,10 +13,13 @@
         <% } %>
       </span>
     </a>
-    <% if (currentUser) { %>
-      <nav class="nav">
+    <button class="nav-toggle" id="navToggle" aria-label="Menu" type="button"><span class="bars"><span class="mid"></span></span></button>
+    <div class="nav-collapse" id="navCollapse">
+      <% if (currentUser) { %>
+        <nav class="nav">
         <% if (currentUser.role === "Admin") { %>
-          <a href="/admin">Admin</a>
+          <a href="/dashboard">Dashboard</a>
+          <a href="/admin">Quick Add Stock</a>
           <a href="/admin/store">Website</a>
           <a href="/inventory">Inventory</a>
           <a href="/customers">Customers</a>
@@ -24,11 +27,17 @@
           <a href="/reports/profit">Profit</a>
           <a href="/returns">Returns</a>
           <a href="/installments">Installments</a>
-          <a href="/sms">SMS Center</a>
+          <a href="/credits">Credits <% if (pendingCreditRequests > 0) { %><span style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:11px;font-weight:700;margin-left:2px;"><%= pendingCreditRequests %></span><% } %></a>
+          <a href="/sms">SMS Center <% if (birthdayCount > 0) { %><span style="background:#ec4899;color:#fff;border-radius:50%;padding:1px 6px;font-size:11px;font-weight:700;margin-left:2px;"><%= birthdayCount %> 🎂</span><% } %></a>
         <% } else { %>
           <a href="/sales">Sales</a>
+          <a href="/inventory">Inventory</a>
           <a href="/customers">Customers</a>
+          <a href="/returns">Returns</a>
           <a href="/installments">Installments</a>
+          <a href="/inventory/summary">Stock Summary</a>
+          <a href="/credits">Credits</a>
+          <a href="/sms">SMS Center <% if (birthdayCount > 0) { %><span style="background:#ec4899;color:#fff;border-radius:50%;padding:1px 6px;font-size:11px;font-weight:700;margin-left:2px;"><%= birthdayCount %> 🎂</span><% } %></a>
         <% } %>
       
 <div id="branchConfirmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
@@ -69,8 +78,11 @@ function closeBranchConfirm() {
 </script>
 
 </nav>
-      <div class="userbox">
+        <div class="userbox">
         <% if (currentBranch) { %>
+          <% if (currentUser && currentUser.role === "Employee") { %>
+            <span class="branch-locked">📍 <%= currentBranch.name %></span>
+          <% } else { %>
           <form class="branch-switch" method="post" action="/branch">
             <select name="branch" id="branchSelect" onchange="confirmBranchSwitch(this.value)" aria-label="Switch shop" data-current="<%= currentBranch.key %>">
               <% for (const branch of branches) { %>
@@ -78,13 +90,14 @@ function closeBranchConfirm() {
               <% } %>
             </select>
           </form>
+          <% } %>
         <% } %>
         <div class="userbox-name"><%= currentUser.name %> (<%= currentUser.role %>)</div>
         <form method="post" action="/logout">
           <button class="btn small secondary" type="submit">Logout</button>
         </form>
-      </div>
-    <% } else { %>
+        </div>
+      <% } else { %>
       <nav class="nav">
         <a href="/login">Login</a>
       
@@ -126,7 +139,49 @@ function closeBranchConfirm() {
 </script>
 
 </nav>
-    <% } %>
+      <% } %>
+    </div>
   </div>
 </header>
+<script>
+(function() {
+  var toggle = document.getElementById('navToggle');
+  var collapse = document.getElementById('navCollapse');
+  if (!toggle || !collapse) return;
+
+  function openNav() {
+    collapse.classList.add('open');
+    toggle.classList.add('open');
+    toggle.setAttribute('aria-expanded', 'true');
+  }
+  function closeNav() {
+    collapse.classList.remove('open');
+    toggle.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.addEventListener('click', function() {
+    if (collapse.classList.contains('open')) {
+      closeNav();
+    } else {
+      openNav();
+    }
+  });
+
+  // Close when clicking outside
+  document.addEventListener('click', function(e) {
+    if (!toggle.contains(e.target) && !collapse.contains(e.target) && collapse.classList.contains('open')) {
+      closeNav();
+    }
+  });
+
+  // Close when a nav link is clicked
+  collapse.querySelectorAll('a').forEach(function(link) {
+    link.addEventListener('click', function() {
+      closeNav();
+    });
+  });
+})();
+</script>
 <main class="container">

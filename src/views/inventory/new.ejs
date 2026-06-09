@@ -19,43 +19,62 @@
   <div class="grid">
     <label>
       Model *
-      <input name="model" id="modelInput" required oninput="checkStock()" /><div id="stockInfo" style="font-size:13px;margin-top:3px;"></div><script>var tmr=null;function checkStock(){clearTimeout(tmr);tmr=setTimeout(function(){var m=document.getElementById("modelInput").value.trim().toLowerCase();var e=document.getElementById("stockInfo");if(!m){e.innerHTML="";return;}fetch("/api/stock-lookup?q="+encodeURIComponent(m)).then(function(r){return r.json()}).then(function(rows){var c=0;rows.forEach(function(r){c+=r.cnt});if(c>0)e.innerHTML="<span style=color:#22c55e>"+c+" in stock</span>";else e.innerHTML="<span style=color:#6b7280>New</span>"})},300)}</script>
+      <input name="model" id="modelInput" required oninput="checkStock()" list="datalistModels" value="<%= (form && form.model) || '' %>" /><div id="stockInfo" style="font-size:13px;margin-top:3px;"></div><script>var tmr=null;function checkStock(){clearTimeout(tmr);tmr=setTimeout(function(){var m=document.getElementById("modelInput").value.trim().toLowerCase();var e=document.getElementById("stockInfo");if(!m){e.innerHTML="";return;}fetch("/api/stock-lookup?q="+encodeURIComponent(m)).then(function(r){return r.json()}).then(function(rows){var c=0;rows.forEach(function(r){c+=r.cnt});if(c>0)e.innerHTML="<span style=color:#22c55e>"+c+" in stock</span>";else e.innerHTML="<span style=color:#6b7280>New</span>"})},300)}</script>
     </label>
     <label>
       Storage
-      <input name="storage" placeholder="e.g. 128GB" />
+      <input name="storage" placeholder="e.g. 128GB" value="<%= (form && form.storage) || '' %>" />
     </label>
     <label>
       Color
-      <input name="color" placeholder="e.g. Black" />
+      <input name="color" placeholder="e.g. Black" value="<%= (form && form.color) || '' %>" />
     </label>
     <label>
       Condition *
       <select name="condition" required>
         <option value="">Select</option>
-        <option>New</option>
-        <option>Used</option>
+        <option<%= (form && form.condition === 'New') ? ' selected' : '' %>>New</option>
+        <option<%= (form && form.condition === 'Used') ? ' selected' : '' %>>Used</option>
+      </select>
+    </label>
+    <label>
+      Type
+      <select name="product_type">
+        <option value="Phone"<%= (form && form.product_type === 'Phone') ? ' selected' : '' %>>Phone</option>
+        <option value="Accessory"<%= (form && form.product_type === 'Accessory') ? ' selected' : '' %>>Accessory</option>
+      </select>
+    </label>
+    <label>
+      OS
+      <select name="os">
+        <option value=""<%= (form && form.os === '') ? ' selected' : '' %>>-</option>
+        <option value="iOS"<%= (form && form.os === 'iOS') ? ' selected' : '' %>>iOS</option>
+        <option value="Android"<%= (form && form.os === 'Android') ? ' selected' : '' %>>Android</option>
       </select>
     </label>
     <label>
       Cost Price (&#8373;) *
-      <input name="cost_price" type="number" min="0" required />
+      <input name="cost_price" type="number" min="0" required value="<%= (form && form.cost_price) || '' %>" />
     </label>
     <label>
       Sale Price (&#8373;) *
-      <input name="sale_price" type="number" min="0" required />
+      <input name="sale_price" type="number" min="0" required value="<%= (form && form.sale_price) || '' %>" />
     </label>
     <label>
       IMEI 1 *
-      <input name="imei1" required />
+      <input name="imei1" required value="<%= (form && form.imei1) || '' %>" />
     </label>
     <label>
       IMEI 2
-      <input name="imei2" />
+      <input name="imei2" value="<%= (form && form.imei2) || '' %>" />
     </label>
   </div>
 
   <button class="btn" type="submit">Save</button>
+
+  <datalist id="datalistModels">
+    <% for (const m of models || []) { %><option value="<%= m %>"></option><% } %>
+  </datalist>
 </form>
 
 <%- include("../partials/foot") %>

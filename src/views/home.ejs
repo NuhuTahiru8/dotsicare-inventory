@@ -9,6 +9,36 @@
   </div>
 </div>
 
+  <% if (typeof pendingCreditRequests !== "undefined" && pendingCreditRequests > 0) { %>
+  <div style="background:#fef9c3;border:2px solid #eab308;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <strong style="color:#854d0e;">⚠️ <%= pendingCreditRequests %> pending credit request<%= pendingCreditRequests > 1 ? 's' : '' %></strong>
+      <span style="color:#a16207;margin-left:8px;">Employee(s) need airtime. Please review and assign credits.</span>
+    </div>
+    <a href="/credits" class="btn" style="background:#eab308;color:#fff;">Review Now →</a>
+  </div>
+  <% } %>
+
+  <% if (typeof birthdayCustomers !== "undefined" && birthdayCustomers.length > 0) { %>
+  <div style="background:#fce7f3;border:2px solid #ec4899;border-radius:12px;padding:16px 20px;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span style="font-size:24px;">🎂</span>
+      <strong style="color:#9d174d;font-size:16px;">Birthday<%= birthdayCustomers.length > 1 ? 's' : '' %> Today!</strong>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">
+      <% birthdayCustomers.forEach(function(c) { %>
+        <div style="background:#fdf2f8;border:1px solid #f9a8d4;border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:20px;">🎈</span>
+          <div>
+            <strong style="color:#831843;"><%= c.name %></strong>
+            <span style="color:#be185d;font-size:12px;display:block;"><%= c.phone %></span>
+          </div>
+          <a href="/sms?phone=<%= c.phone %>" style="background:#ec4899;color:#fff;padding:4px 10px;border-radius:6px;text-decoration:none;font-size:12px;white-space:nowrap;">Send SMS</a>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+  <% } %>
 
   <div class="cards" style="margin-bottom:20px;">
     <div class="card" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #22c55e;">
@@ -19,7 +49,7 @@
         <span>Android: <strong><%= typeof inStock !== "undefined" ? inStock.Android : 0 %></strong></span>
         <span>Acc: <strong><%= typeof inStock !== "undefined" ? inStock.Accessory : 0 %></strong></span>
       </div>
-      <% if (typeof inStock !== "undefined" && inStock.total < 5) { %>
+      <% if (typeof inStock !== "undefined" && inStock.total < lowStockThreshold) { %>
         <div style="margin-top:8px;font-size:11px;color:#dc2626;font-weight:600;">Low stock!</div>
       <% } %>
       <div class="card-actions"><a class="btn" href="/inventory/summary">View Summary</a></div>
@@ -29,6 +59,31 @@
       <div class="card-value" style="color:#b91c1c;"><%= typeof soldCount !== "undefined" ? soldCount : 0 %></div>
       <div class="card-actions"><a class="btn" href="/sales">View Sales</a></div>
     </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #3b82f6;">
+    <div class="card-title" style="color:#1d4ed8;">📊 Today's Sales — <%= todayDate %></div>
+    <div style="display:flex;gap:24px;margin:8px 0;">
+      <div><span style="font-size:24px;font-weight:700;color:#1e40af;"><%= todayCount %></span><br/><span style="font-size:11px;color:#3b82f6;">Sales</span></div>
+      <div><span style="font-size:24px;font-weight:700;color:#1e40af;">₵ <%= typeof currency === "function" ? currency(todayRevenue) : todayRevenue %></span><br/><span style="font-size:11px;color:#3b82f6;">Revenue</span></div>
+    </div>
+    <% if (typeof todaySales !== "undefined" && todaySales.length > 0) { %>
+      <table style="width:100%;font-size:12px;margin-top:8px;">
+        <thead><tr><th style="text-align:left;">Customer</th><th style="text-align:left;">Device</th><th style="text-align:right;">Price</th></tr></thead>
+        <tbody>
+          <% todaySales.forEach(function(s) { %>
+            <tr>
+              <td><%= s.customer_name || "-" %></td>
+              <td><%= s.model + " " + (s.storage||"") %></td>
+              <td style="text-align:right;">&#8373;<%= Number(Math.max(0, (s.sale_price||0) - (s.discount||0))).toLocaleString() %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    <% } else { %>
+      <p style="color:#6b7280;font-size:13px;margin-top:8px;">No sales recorded today yet.</p>
+    <% } %>
+    <div class="card-actions"><a class="btn" href="/sales?today=1">View All Today →</a></div>
   </div>
 
   <% if (typeof lastSales !== "undefined" && lastSales.length > 0) { %>
@@ -50,16 +105,6 @@
   <% } %>
 
 <div class="cards">
-  <div class="card">
-    <div class="card-title">Items Left</div>
-    <div class="card-value"><%= dashboard?.in_stock || 0 %></div>
-    <div class="card-actions"><a class="btn" href="/inventory">View Inventory</a></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Items Sold</div>
-    <div class="card-value"><%= dashboard?.sold || 0 %></div>
-    <div class="card-actions"><a class="btn" href="/sales">View Sales</a></div>
-  </div>
   <div class="card">
     <div class="card-title">Gross Profit</div>
     <div class="card-value money">&#8373; <%= currency(dashboard?.gross_profit || 0) %></div>
@@ -125,16 +170,16 @@
         <% } %>
       </tbody>
     </table>
-    <p class="hint">Use batches like “May 2026 Stock” so new stock does not mix with old stock.</p>
+    <p class="hint">Use batches like "May 2026 Stock" so new stock does not mix with old stock.</p>
   </div>
 </div>
 
 <div class="quick">
   <a class="btn" href="/customers/new">Add Customer</a>
   <a class="btn" href="/sales/new">New Sale</a>
+  <a class="btn" href="/sms">Send Debt SMS</a>
   <% if (currentUser && currentUser.role === "Admin") { %>
     <a class="btn" href="/inventory/new">Add Stock</a>
-    <a class="btn" href="/sms">Send Debt SMS</a>
   <% } %>
 </div>
 

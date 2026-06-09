@@ -35,6 +35,7 @@ function addColumnIfMissing(table, columnDef) {
 function migrate() {
   addColumnIfMissing("users", "password_salt TEXT");
   addColumnIfMissing("users", "password_hash TEXT");
+  addColumnIfMissing("users", "password TEXT");
 
   addColumnIfMissing("devices", "branch TEXT NOT NULL DEFAULT 'Konongo'");
   addColumnIfMissing("devices", "stock_batch_id INTEGER");
@@ -59,6 +60,7 @@ function migrate() {
   addColumnIfMissing("payments", "created_by_user_id INTEGER");
   addColumnIfMissing("message_templates", "branch TEXT NOT NULL DEFAULT 'Konongo'");
   addColumnIfMissing("message_templates", "created_by_user_id INTEGER");
+  addColumnIfMissing("message_templates", "use_count INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing("sms_messages", "branch TEXT NOT NULL DEFAULT 'Konongo'");
   addColumnIfMissing("sms_messages", "created_by_user_id INTEGER");
   addColumnIfMissing("customers", "customer_type TEXT NOT NULL DEFAULT 'Customer'");
@@ -66,6 +68,14 @@ function migrate() {
   addColumnIfMissing("customers", "id_held INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing("customers", "id_held_at TEXT");
   addColumnIfMissing("sales", "is_returned INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing("devices", "product_type TEXT NOT NULL DEFAULT 'Phone'");
+  addColumnIfMissing("devices", "os TEXT");
+  addColumnIfMissing("users", "branch TEXT");
+  addColumnIfMissing("users", "sms_credits INTEGER NOT NULL DEFAULT 100");
+  addColumnIfMissing("customers", "birth_day INTEGER");
+  addColumnIfMissing("customers", "birth_month TEXT");
+
+  addColumnIfMissing("returns", "exchange_sale_id INTEGER");
 
   //  returns table (create if not exists — schema.sql handles it, migration fallback)
   db.exec(`
@@ -118,6 +128,48 @@ function migrate() {
   ).run();
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS credit_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      amount INTEGER,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      fulfilled_at TEXT,
+      fulfilled_by_user_id INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (fulfilled_by_user_id) REFERENCES users(id)
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_contacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      branch TEXT NOT NULL DEFAULT 'Konongo',
+      phone TEXT NOT NULL,
+      name TEXT,
+      source_text TEXT,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(branch, phone)
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sale_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_id INTEGER NOT NULL,
+      device_id INTEGER NOT NULL,
+      unit_price INTEGER NOT NULL,
+      discount INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
+      FOREIGN KEY (device_id) REFERENCES devices(id)
+    );
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
+    CREATE INDEX IF NOT EXISTS idx_credit_requests_status ON credit_requests(status);
     CREATE INDEX IF NOT EXISTS idx_stock_batches_branch ON stock_batches(branch);
     CREATE INDEX IF NOT EXISTS idx_devices_branch_status ON devices(branch, status);
     CREATE INDEX IF NOT EXISTS idx_devices_stock_batch ON devices(stock_batch_id);
@@ -129,6 +181,40 @@ function migrate() {
     CREATE INDEX IF NOT EXISTS idx_sales_created_by_user ON sales(created_by_user_id);
     CREATE INDEX IF NOT EXISTS idx_message_templates_branch ON message_templates(branch);
     CREATE INDEX IF NOT EXISTS idx_sms_messages_branch ON sms_messages(branch);
+  `);
+
+  // Backfill OS for existing devices where OS is NULL
+  db.exec(`
+    UPDATE devices SET os = 'iOS'
+    WHERE os IS NULL
+      AND product_type = 'Phone'
+      AND (lower(model) LIKE '%iphone%'
+           OR lower(model) LIKE '%ipad%'
+           OR lower(model) LIKE '%macbook%'
+           OR lower(model) LIKE '%apple%');
+  `);
+  db.exec(`
+    UPDATE devices SET os = 'Android'
+    WHERE os IS NULL
+      AND product_type = 'Phone'
+      AND (lower(model) LIKE '%samsung%'
+           OR lower(model) LIKE '%galaxy%'
+           OR lower(model) LIKE '%google pixel%'
+           OR lower(model) LIKE '%oneplus%'
+           OR lower(model) LIKE '%xiaomi%'
+           OR lower(model) LIKE '%oppo%'
+           OR lower(model) LIKE '%vivo%'
+           OR lower(model) LIKE '%realme%'
+           OR lower(model) LIKE '%tecno%'
+           OR lower(model) LIKE '%infinix%'
+           OR lower(model) LIKE '%nokia%'
+           OR lower(model) LIKE '%huawei%'
+           OR lower(model) LIKE '%honor%'
+           OR lower(model) LIKE '%motorola%'
+           OR lower(model) LIKE '%sony%'
+           OR lower(model) LIKE '%lg %'
+           OR lower(model) LIKE '%htc%'
+           OR lower(model) LIKE '%android%');
   `);
 }
 

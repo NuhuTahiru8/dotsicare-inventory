@@ -11,9 +11,76 @@
 <% } %>
 
 <form class="form" method="post" action="/sales/new" autocomplete="off">
-  <!-- Customer Type Tabs -->
-  <div class="row" style="margin-bottom: 0;">
-    <h2 style="margin: 0;">Who is buying?</h2>
+
+  <!-- ═══════════════════════════════════
+       STEP 1: SALE TYPE — BIG BUTTONS
+       ═══════════════════════════════════ -->
+  <h2 style="margin-bottom:8px;">Sale Type</h2>
+  <div class="sale-type-bar">
+    <button type="button" class="sale-type-btn active" data-type="Full" onclick="pickSaleType('Full', this)">
+      <span class="st-icon">💰</span>
+      <span class="st-label">Full Payment</span>
+      <span class="st-hint">Pay everything now</span>
+    </button>
+    <button type="button" class="sale-type-btn" data-type="Installment" onclick="pickSaleType('Installment', this)">
+      <span class="st-icon">📆</span>
+      <span class="st-label">Installment</span>
+      <span class="st-hint">Pay over time</span>
+    </button>
+    <button type="button" class="sale-type-btn" data-type="SwapFull" onclick="pickSaleType('SwapFull', this)">
+      <span class="st-icon">🔄</span>
+      <span class="st-label">Swap</span>
+      <span class="st-hint">Trade-in + pay now</span>
+    </button>
+    <button type="button" class="sale-type-btn" data-type="SwapInstallment" onclick="pickSaleType('SwapInstallment', this)">
+      <span class="st-icon">🔄📆</span>
+      <span class="st-label">Swap + Installment</span>
+      <span class="st-hint">Trade-in + pay later</span>
+    </button>
+  </div>
+  <input type="hidden" name="sale_type" id="saleTypeHidden" value="Full" />
+
+  <!-- ═══════════════════════════════════
+       STEP 2: PRODUCT TYPE — BIG BUTTONS
+       ═══════════════════════════════════ -->
+  <h2 style="margin-bottom:8px;">Product Type</h2>
+  <div class="product-type-bar">
+    <button type="button" class="product-type-btn active" data-ptype="Phone" onclick="pickProductType('Phone', this)">
+      <span class="st-icon">📱</span>
+      <span class="st-label">Phone Sale</span>
+    </button>
+    <button type="button" class="product-type-btn" data-ptype="Accessory" onclick="pickProductType('Accessory', this)">
+      <span class="st-icon">🔌</span>
+      <span class="st-label">Accessory Sale</span>
+    </button>
+  </div>
+  <input type="hidden" name="product_type" id="productTypeHidden" value="Phone" />
+
+  <!-- ═══════════════════════════════════
+       STEP 3: OPERATING SYSTEM — BIG BUTTONS
+       ═══════════════════════════════════ -->
+  <h2 style="margin-bottom:8px;">Operating System</h2>
+  <div class="os-bar">
+    <button type="button" class="os-btn" data-os="" onclick="pickOS('', this)">
+      <span class="st-icon">📱🤖</span>
+      <span class="st-label">All Devices</span>
+    </button>
+    <button type="button" class="os-btn active" data-os="iOS" onclick="pickOS('iOS', this)">
+      <span class="st-icon">🍎</span>
+      <span class="st-label">iOS</span>
+    </button>
+    <button type="button" class="os-btn" data-os="Android" onclick="pickOS('Android', this)">
+      <span class="st-icon">🤖</span>
+      <span class="st-label">Android</span>
+    </button>
+  </div>
+  <input type="hidden" name="device_os" id="osHidden" value="iOS" />
+
+  <!-- ═══════════════════════════════════
+       STEP 4: WHO IS BUYING?
+       ═══════════════════════════════════ -->
+  <div class="row" style="margin-bottom:0;">
+    <h2 style="margin:0;">Customer</h2>
     <div class="row-actions">
       <button type="button" class="btn" id="tabCustomerBtn" onclick="switchSaleTab('Customer')">Customers</button>
       <button type="button" class="btn secondary" id="tabDealerBtn" onclick="switchSaleTab('Dealer')">Dealers</button>
@@ -22,29 +89,21 @@
 
   <div class="grid">
     <label>
-      Customer *
+      Name *
       <input type="hidden" name="customer_id" id="customerIdField" value="" />
-      <div style="display: flex; gap: 6px; align-items: center;">
-        <select id="customerSelect" style="flex: 1;" onchange="onCustomerChange()">
-          <option value="">Select existing customer</option>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select id="customerSelect" style="flex:1;" onchange="onCustomerChange()">
+          <option value="">Pick existing customer</option>
           <% for (const c of customers) { %>
             <option value="<%= c.id %>" data-type="<%= c.customer_type %>" data-ghana-card="<%= c.ghana_card || "" %>"><%= c.name %> (<%= c.phone %>)<%= c.customer_type === "Dealer" ? " [Dealer]" : "" %></option>
           <% } %>
         </select>
-        <span class="muted" style="white-space: nowrap; font-size: 13px;">or</span>
-        <button class="btn secondary small" type="button" id="newCustomerToggle" onclick="toggleNewCustomer()" style="white-space: nowrap;">+ New</button>
+        <span class="muted" style="white-space:nowrap;font-size:13px;">or</span>
+        <button class="btn secondary small" type="button" id="newCustomerToggle" onclick="toggleNewCustomer()" style="white-space:nowrap;">+ New</button>
       </div>
     </label>
 
-    <div id="ghanaCardWarn" style="display: none; margin-top: -4px;">
-      <label>
-        <span style="color: var(--red); font-weight: 700;">Ghana Card Required *</span>
-        <span class="hint">Installment sales require a Ghana Card number.</span>
-        <input name="ghana_card_existing" id="ghanaCardExisting" placeholder="GHA-XXXXXXXXX-X" class="mono" style="border-color: var(--red);" />
-      </label>
-    </div>
-
-    <div id="newCustomerFields" style="display: none;">
+    <div id="newCustomerFields" style="display:none;">
       <div class="grid">
         <label>
           <span id="newCustomerLabel">Customer</span> Name *
@@ -58,90 +117,124 @@
           Address
           <input name="customer_address" placeholder="Optional" />
         </label>
-        <label>
-          Ghana Card Number
-          <input name="ghana_card" id="ghanaCardNew" placeholder="GHA-XXXXXXXXX-X" class="mono" />
-        </label>
         <input type="hidden" name="customer_type" id="customerTypeField" value="Customer" />
-        <div id="dealerInlineFields" style="display: none;">
-          <label>
-            <input type="checkbox" name="id_held" value="1" /> Hold Ghana Card
-            <span class="hint">Check if dealer is paying later (installment). Leave unchecked if paid in full.</span>
-          </label>
-        </div>
         <input type="hidden" name="create_customer" id="createCustomerFlag" value="" />
       </div>
     </div>
+  </div>
 
-    <!-- DEVICE SEARCH -->
+  <!-- Ghana Card — only for installment types -->
+  <div id="ghanaCardSection" style="display:none;">
     <label>
-      Sale Type *
-      <div class="row" style="gap:12px;margin-bottom:12px;">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-          <input type="radio" name="product_type" value="Phone" checked onchange="toggleProductType()" /> Phone
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-          <input type="radio" name="product_type" value="Accessory" onchange="toggleProductType()" /> Accessory
-        </label>
-      </div>
+      <span style="color:var(--red);font-weight:700;">Ghana Card *</span>
+      <span class="hint">Required for installment sales.</span>
+      <input name="ghana_card" id="ghanaCardUnified" placeholder="GHA-XXXXXXXXX-X" class="mono" style="border-color:var(--red);" />
+    </label>
+  </div>
 
-      <div id="phoneOsSection">
-        <label>
-          Operating System
-          <select name="device_os" id="deviceOs">
-            <option value="iOS">iOS</option>
-            <option value="Android">Android</option>
-          </select>
-        </label>
-      </div>
+  <!-- Dealer ID Held — only for Dealer + Installment -->
+  <div id="idHeldSection" style="display:none;">
+    <label>
+      <input type="checkbox" name="id_held" value="1" /> Hold Ghana Card for this dealer
+      <span class="hint">Check if the dealer is paying later and you're holding their ID.</span>
+    </label>
+  </div>
 
-      <div id="imeiSection">
-      IMEI *
-      <input type="text" id="imeiSearch" placeholder="Type IMEI to find device (e.g. 1234)..." autocomplete="off" style="font-family:monospace;font-size:15px;" />
-      <span class="searchable-hint">Type IMEI - matching device will auto-fill. Or search below.</span>
+  <!-- ═══════════════════════════════════
+       STEP 4: ADD TO CART — SEARCH + BUTTON
+       ═══════════════════════════════════ -->
+  <h2 style="margin-bottom:8px;">🛒 Add To Cart</h2>
+  <div class="grid" style="align-items:end;">
 
-      Device (In Stock) *
-      <input type="hidden" name="device_id" id="deviceIdField" value="" />
-      <div class="searchable-wrap">
-        <input
-          type="text"
-          id="deviceSearch"
-          class="searchable-input"
-          placeholder="Search by model, storage, color, or IMEI..."
-          autocomplete="off"
-        />
+    <label id="imeiSection">
+      Search Device
+      <div class="searchable-wrap searchable-wrap--unified">
+        <input type="text" id="deviceSearch" class="searchable-input searchable-input--unified" placeholder="Type IMEI, model, or storage..." autocomplete="off" />
         <div class="searchable-results" id="deviceResults"></div>
       </div>
-      <span class="searchable-hint">Type e.g. "XR", "12 Pro", "128GB", or last 4 IMEI digits</span>
-      <div id="selectedDeviceImei" style="margin-top:6px;font-size:13px;color:#0f2d62;font-weight:600;display:none;"></div>
+      <span class="searchable-hint">Type anything — IMEI, model name, storage, or color</span>
+    </label>
+
+    <label id="accessorySection" style="display:none;">
+      Search Accessory
+      <div class="searchable-wrap searchable-wrap--unified">
+        <input type="text" id="accessorySearch" class="searchable-input searchable-input--unified" placeholder="Type accessory name..." autocomplete="off" />
+        <div class="searchable-results" id="accessoryResults"></div>
+      </div>
+      <span class="searchable-hint">Pick from stock only — type to search</span>
     </label>
 
     <label>
-      Sale Type *
-      <select id="saleType" name="sale_type" required>
-        <option value="">Select</option>
-        <option value="Full">Full</option>
-        <option value="Installment">Installment</option>
-        <option value="SwapFull">Swap (Full)</option>
-        <option value="SwapInstallment">Swap (Installment)</option>
-      </select>
-    </label>
-
-    <label>
-      Sale Price (&#8373;) *
-      <input name="sale_price" id="salePriceInput" type="number" min="0" required oninput="checkPriceHint()" />
-      <div id="priceHint" style="display: none; color: var(--amber); font-size: 12px; margin-top: 3px;"></div>
+      Price (&#8373;)
+      <input type="number" id="cartItemPrice" min="0" placeholder="0" style="width:120px;" />
     </label>
 
     <label>
       Discount (&#8373;)
-      <input name="discount" id="discountInput" type="number" min="0" value="0" />
-      <span class="hint">Use this if you sell below the device price. e.g. Price = 5000, Discount = 1000 &rarr; customer pays 4000</span>
+      <input type="number" id="cartItemDiscount" min="0" value="0" placeholder="0" style="width:100px;" />
     </label>
 
     <label>
+      Qty
+      <input type="number" id="cartItemQty" min="1" value="1" style="width:70px;" />
+    </label>
+
+    <button type="button" class="btn" id="addToCartBtn" style="height:42px;align-self:end;" onclick="addToCart()">+ Add</button>
+  </div>
+
+  <input type="hidden" name="device_id" id="deviceIdField" value="" />
+  <div id="selectedDeviceImei" style="margin-top:2px;font-size:13px;color:#0f2d62;font-weight:600;display:none;"></div>
+  <div id="selectedAccessoryInfo" style="margin-top:2px;font-size:13px;color:#0f2d62;font-weight:600;display:none;"></div>
+
+  <!-- ═══════════════════════════════════
+       CART TABLE
+       ═══════════════════════════════════ -->
+  <div id="cartSection" style="display:none;">
+    <h2 style="margin-top:20px;">Cart (<span id="cartCount">0</span> items)</h2>
+    <table class="table" id="cartTable" style="width:100%;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Device</th>
+          <th>Details</th>
+          <th>Qty</th>
+          <th>Price (₵)</th>
+          <th>Discount (₵)</th>
+          <th>Subtotal (₵)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="cartBody"></tbody>
+      <tfoot>
+        <tr style="font-weight:700;background:#f8fafc;">
+          <td colspan="2">Total</td>
+          <td id="cartTotalItems" style="color:var(--muted);font-weight:400;">0 items</td>
+          <td></td>
+          <td id="cartTotalPrice" style="color:#0f2d62;">0</td>
+          <td id="cartTotalDiscount" style="color:#dc2626;">0</td>
+          <td id="cartTotalNet" style="color:#16a34a;">0</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    <!-- Hidden fields for form submission -->
+    <div id="cartHiddenFields"></div>
+  </div>
+
+  <!-- Show cart-empty message when no items -->
+  <div id="cartEmpty" style="color:var(--muted);margin:12px 0;font-size:14px;">
+    No items added yet. Search a device above and click <b>+ Add</b>.
+  </div>
+
+  <!-- ═══════════════════════════════════
+       STEP 5: PAYMENT
+       ═══════════════════════════════════ -->
+  <h2>Payment</h2>
+  <div class="grid">
+    <label id="downPaymentSection" style="display:none;">
       Down Payment (&#8373;)
       <input name="down_payment" type="number" min="0" value="0" />
+      <span class="hint">Customer pays this now. Rest is due later.</span>
     </label>
 
     <label>
@@ -155,23 +248,30 @@
     </label>
   </div>
 
-  <div id="swapFields" class="panel" style="display:none">
-    <h2>Trade-in (Swap)</h2>
+  <!-- Hidden aggregated fields for backend compatibility -->
+  <input type="hidden" name="sale_price" id="salePriceHidden" value="0" />
+  <input type="hidden" name="discount" id="discountHidden" value="0" />
+
+  <!-- ═══════════════════════════════════
+       STEP 6: TRADE-IN (SWAP ONLY)
+       ═══════════════════════════════════ -->
+  <div id="swapFields" style="display:none;">
+    <h2>Trade-in Device</h2>
     <div class="grid">
       <label>
-        Trade-in Model *
+        Model *
         <input name="trade_model" />
       </label>
       <label>
-        Trade-in Storage
+        Storage
         <input name="trade_storage" placeholder="e.g. 128GB" />
       </label>
       <label>
-        Trade-in Color
+        Color
         <input name="trade_color" placeholder="e.g. Black" />
       </label>
       <label>
-        Trade-in Condition *
+        Condition *
         <select name="trade_condition">
           <option value="">Select</option>
           <option>New</option>
@@ -183,54 +283,108 @@
         <input name="trade_in_value" type="number" min="0" />
       </label>
       <label>
-        Trade-in IMEI 1 *
+        IMEI 1 *
         <input name="trade_imei1" />
       </label>
       <label>
-        Trade-in IMEI 2
+        IMEI 2
         <input name="trade_imei2" />
       </label>
     </div>
-    <p class="hint">Swap reduces what the customer must pay: Payable = Sale - Discount - Trade-in Value.</p>
+    <p class="hint">Customer pays: Sale Price − Discount − Trade-in Value.</p>
   </div>
 
-  <button class="btn" type="submit">Create Sale</button>
+  <button class="btn" type="submit" id="submitBtn">Create Sale</button>
 </form>
 
-<p class="hint">For installment: down payment is recorded immediately and due date is set to 3 months.</p>
-
 <script>
-// ─── DEVICE SEARCH ───
-var allDevices = <%- JSON.stringify(devices.map(d => ({ id: d.id, model: d.model, storage: d.storage || "", color: d.color || "", imeis: d.imeis || "", condition: d.condition, sale_price: d.sale_price || 0 }))) %>;
+/* ═════════════════════════════════════════════════
+   SALE TYPE BUTTONS
+   ═════════════════════════════════════════════════ */
+function pickSaleType(type, btn) {
+  document.getElementById("saleTypeHidden").value = type;
+  document.querySelectorAll(".sale-type-btn").forEach(function (b) { b.classList.remove("active"); });
+  btn.classList.add("active");
 
-function toggleProductType() {
-  var type = document.querySelector('input[name="product_type"]:checked').value;
-  document.getElementById("imeiSection").style.display = type === "Phone" ? "block" : "none";
-  document.getElementById("phoneOsSection").style.display = type === "Phone" ? "block" : "none";
+  var isInstallment = type === "Installment" || type === "SwapInstallment";
+  var isSwap = type === "SwapFull" || type === "SwapInstallment";
+
+  document.getElementById("ghanaCardSection").style.display = isInstallment ? "block" : "none";
+  document.getElementById("downPaymentSection").style.display = isInstallment ? "block" : "none";
+  document.getElementById("swapFields").style.display = isSwap ? "block" : "none";
+
+  updateIdHeldSection();
 }
-var imeiSearch = document.getElementById("imeiSearch");
+
+/* ═════════════════════════════════════════════════
+   DEVICE SEARCH
+   ═════════════════════════════════════════════════ */
+var allDevices = <%- JSON.stringify(devices.map(d => ({ id: d.id, model: d.model, storage: d.storage || "", color: d.color || "", imeis: d.imeis || "", condition: d.condition, sale_price: d.sale_price || 0, os: d.os || "", product_type: d.product_type || "Phone" }))) %>;
+var accessoriesInStock = allDevices.filter(function(d) { return d.product_type === "Accessory"; });
+var highlightIdx = -1;
+var selectedOS = "iOS";
+var cart = [];
+var selectedPendingDevice = null; // { id, model, variant, imeis, price }
+
+function pickProductType(type, btn) {
+  document.getElementById("productTypeHidden").value = type;
+  document.querySelectorAll(".product-type-btn").forEach(function (b) { b.classList.remove("active"); });
+  btn.classList.add("active");
+  document.getElementById("imeiSection").style.display = type === "Phone" ? "block" : "none";
+  document.getElementById("accessorySection").style.display = type === "Accessory" ? "block" : "none";
+  // Show/hide OS bar based on product type
+  var osBar = document.querySelector(".os-bar");
+  var osHeading = osBar.previousElementSibling;
+  if (type === "Accessory") {
+    osBar.style.display = "none";
+    osHeading.style.display = "none";
+  } else {
+    osBar.style.display = "";
+    osHeading.style.display = "";
+  }
+}
+
+function pickOS(os, btn) {
+  selectedOS = os;
+  document.getElementById("osHidden").value = os;
+  document.querySelectorAll(".os-btn").forEach(function (b) { b.classList.remove("active"); });
+  btn.classList.add("active");
+  // Re-trigger search if something is typed
+  if (deviceSearch.value.trim()) {
+    deviceSearch.dispatchEvent(new Event("input"));
+  }
+}
+
 var deviceSearch = document.getElementById("deviceSearch");
 var deviceResults = document.getElementById("deviceResults");
 var deviceIdField = document.getElementById("deviceIdField");
-var highlightIdx = -1;
-var selectedDevicePrice = 0;
-
-imeiSearch.addEventListener("input", function () { var q = imeiSearch.value.trim().toLowerCase(); if (!q || q.length < 2) return; var found = allDevices.find(function (d) { return (d.imeis || "").toLowerCase().indexOf(q) !== -1; }); if (found) { selectDevice(found.id, found.model + " " + (found.storage||"") + " " + (found.color||"") + " " + (found.imeis||"")); imeiSearch.style.borderColor = "#22c55e"; } else { imeiSearch.style.borderColor = "#ef4444"; } });
 
 deviceSearch.addEventListener("input", function () {
   var q = deviceSearch.value.trim().toLowerCase();
   highlightIdx = -1;
-  if (!q) {
-    deviceResults.classList.remove("open");
-    deviceResults.innerHTML = "";
-    return;
-  }
+  if (!q) { deviceResults.classList.remove("open"); deviceResults.innerHTML = ""; return; }
   var filtered = allDevices.filter(function (d) {
+    // Only phones for the phone search
+    if (d.product_type === "Accessory") return false;
+    // OS filter
+    if (selectedOS && (d.os || "").toLowerCase() !== selectedOS.toLowerCase()) return false;
     return d.model.toLowerCase().indexOf(q) !== -1
         || (d.storage || "").toLowerCase().indexOf(q) !== -1
         || (d.color || "").toLowerCase().indexOf(q) !== -1
         || (d.imeis || "").toLowerCase().indexOf(q) !== -1;
   });
+  // Auto-select: if typing an IMEI that matches exactly one device, pick it immediately
+  var imeiMatch = allDevices.filter(function (d) {
+    if (selectedOS && (d.os || "").toLowerCase() !== selectedOS.toLowerCase()) return false;
+    return (d.imeis || "").toLowerCase().indexOf(q) !== -1;
+  });
+  if (imeiMatch.length === 1 && q.length >= 5) {
+    selectDevice(imeiMatch[0].id, imeiMatch[0].model + " " + (imeiMatch[0].storage||"") + " " + (imeiMatch[0].color||"") + " " + (imeiMatch[0].imeis||""));
+    deviceSearch.style.borderColor = "#22c55e";
+    return;
+  } else if (q.length >= 5) {
+    deviceSearch.style.borderColor = imeiMatch.length > 0 ? "#22c55e" : "";
+  }
 
   if (filtered.length === 0) {
     deviceResults.innerHTML = '<div class="searchable-empty">No devices match "' + escapeHtml(q) + '"</div>';
@@ -251,32 +405,15 @@ deviceSearch.addEventListener("input", function () {
 deviceSearch.addEventListener("keydown", function (e) {
   var items = deviceResults.querySelectorAll(".searchable-item");
   if (!items.length) return;
-  if (e.key === "ArrowDown") {
-    e.preventDefault();
-    highlightIdx = Math.min(highlightIdx + 1, items.length - 1);
-    updateHighlight(items);
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    highlightIdx = Math.max(highlightIdx - 1, 0);
-    updateHighlight(items);
-  } else if (e.key === "Enter") {
-    e.preventDefault();
-    if (highlightIdx >= 0 && items[highlightIdx]) {
-      items[highlightIdx].click();
-    }
-  } else if (e.key === "Escape") {
-    deviceResults.classList.remove("open");
-    highlightIdx = -1;
-  }
+  if (e.key === "ArrowDown") { e.preventDefault(); highlightIdx = Math.min(highlightIdx + 1, items.length - 1); updateHighlight(items); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); highlightIdx = Math.max(highlightIdx - 1, 0); updateHighlight(items); }
+  else if (e.key === "Enter") { e.preventDefault(); if (highlightIdx >= 0 && items[highlightIdx]) items[highlightIdx].click(); }
+  else if (e.key === "Escape") { deviceResults.classList.remove("open"); highlightIdx = -1; }
 });
 
 function updateHighlight(items) {
-  items.forEach(function (item, i) {
-    item.classList.toggle("highlight", i === highlightIdx);
-  });
-  if (highlightIdx >= 0 && items[highlightIdx]) {
-    items[highlightIdx].scrollIntoView({ block: "nearest" });
-  }
+  items.forEach(function (item, i) { item.classList.toggle("highlight", i === highlightIdx); });
+  if (highlightIdx >= 0 && items[highlightIdx]) items[highlightIdx].scrollIntoView({ block: "nearest" });
 }
 
 function selectDevice(id, label) {
@@ -284,189 +421,257 @@ function selectDevice(id, label) {
   deviceIdField.value = id;
   deviceResults.classList.remove("open");
   highlightIdx = -1;
-
-  // auto-fill sale price
+  deviceSearch.style.borderColor = "#22c55e";
+  setTimeout(function () { deviceSearch.style.borderColor = ""; }, 2000);
   var dev = allDevices.find(function (d) { return d.id === id; });
-  selectedDevicePrice = dev ? (dev.sale_price || 0) : 0;
-
-  // Show IMEI
+  var variant = [dev.storage, dev.color, dev.condition].filter(Boolean).join(" / ");
+  selectedPendingDevice = { id: dev.id, model: dev.model, variant: variant, imeis: dev.imeis, price: dev.sale_price || 0, product_type: "Phone" };
   var imeiEl = document.getElementById("selectedDeviceImei");
-  if (dev && dev.imeis) {
-    imeiEl.style.display = "block";
-    imeiEl.textContent = "IMEI: " + dev.imeis;
-  } else {
-    imeiEl.style.display = "none";
+  if (dev && dev.imeis) { imeiEl.style.display = "block"; imeiEl.textContent = "IMEI: " + dev.imeis; }
+  else { imeiEl.style.display = "none"; }
+  // Auto-fill price
+  var priceInput = document.getElementById("cartItemPrice");
+  if (dev && dev.sale_price && priceInput) {
+    priceInput.value = parseFloat(dev.sale_price).toFixed(0);
+    priceInput.style.background = "rgba(22,163,74,0.06)";
+    setTimeout(function () { priceInput.style.background = ""; }, 1500);
   }
-  var priceInput = document.querySelector('input[name="sale_price"]');
-  if (dev && dev.sale_price) {
-    if (priceInput && !priceInput.value) {
-      priceInput.value = parseFloat(dev.sale_price).toFixed(0);
-      priceInput.style.background = "rgba(22,163,74,0.06)";
-      setTimeout(function () { priceInput.style.background = ""; }, 1500);
-    }
-  }
-  checkPriceHint();
+  document.getElementById("cartItemDiscount").value = "0";
+  document.getElementById("addToCartBtn").focus();
 }
 
-// ─── PRICE vs DISCOUNT HINT ───
-function checkPriceHint() {
-  var hint = document.getElementById("priceHint");
-  var priceVal = parseFloat(document.getElementById("salePriceInput").value) || 0;
-  if (!selectedDevicePrice || !priceVal || priceVal >= selectedDevicePrice) {
-    hint.style.display = "none";
-    return;
-  }
-  var diff = selectedDevicePrice - priceVal;
-  hint.style.display = "block";
-  hint.textContent = "Price (\u20B5" + priceVal.toLocaleString() + ") is below device price (\u20B5" + selectedDevicePrice.toLocaleString() + "). Put \u20B5" + diff.toLocaleString() + " as Discount instead.";
-}
-
-function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
-function escapeJs(s) { return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
+function escapeHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function escapeJs(s) { return String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'"); }
 
 document.addEventListener("click", function (e) {
-  if (!deviceSearch.contains(e.target) && !deviceResults.contains(e.target)) {
-    deviceResults.classList.remove("open");
-    highlightIdx = -1;
-  }
+  if (!deviceSearch.contains(e.target) && !deviceResults.contains(e.target)) { deviceResults.classList.remove("open"); highlightIdx = -1; }
+  if (!accessorySearch.contains(e.target) && !accessoryResults.contains(e.target)) { accessoryResults.classList.remove("open"); accHighlightIdx = -1; }
 });
 
-// ─── SALE TYPE TOGGLE ───
-(function () {
-  var sel = document.getElementById("saleType");
-  var swap = document.getElementById("swapFields");
-  function sync() {
-    var v = (sel && sel.value) || "";
-    var isSwap = v === "SwapFull" || v === "SwapInstallment";
-    if (swap) swap.style.display = isSwap ? "block" : "none";
-    checkGhanaCardRequirement();
-  }
-  if (sel) sel.addEventListener("change", sync);
-  sync();
-})();
+/* ═════════════════════════════════════════════════
+   ACCESSORY SEARCH
+   ═════════════════════════════════════════════════ */
+var accessorySearch = document.getElementById("accessorySearch");
+var accessoryResults = document.getElementById("accessoryResults");
+var accHighlightIdx = -1;
 
-// ─── GHANA CARD REQUIREMENT FOR INSTALLMENT ───
-function isInstallmentSaleType() {
-  var v = (document.getElementById("saleType") || {}).value || "";
-  return v === "Installment" || v === "SwapInstallment";
-}
-
-function checkGhanaCardRequirement() {
-  var warnDiv = document.getElementById("ghanaCardWarn");
-  if (!isInstallmentSaleType()) {
-    if (warnDiv) warnDiv.style.display = "none";
-    return;
-  }
-
-  var newFieldsOpen = document.getElementById("newCustomerFields").style.display !== "none";
-
-  if (newFieldsOpen) {
-    // "+ New" is open — Ghana Card input is already visible inside it
-    if (warnDiv) warnDiv.style.display = "none";
+accessorySearch.addEventListener("input", function () {
+  var q = accessorySearch.value.trim().toLowerCase();
+  accHighlightIdx = -1;
+  if (!q) { accessoryResults.classList.remove("open"); accessoryResults.innerHTML = ""; return; }
+  var filtered = accessoriesInStock.filter(function (d) {
+    return d.model.toLowerCase().indexOf(q) !== -1
+        || (d.storage || "").toLowerCase().indexOf(q) !== -1
+        || (d.color || "").toLowerCase().indexOf(q) !== -1;
+  });
+  if (filtered.length === 0) {
+    accessoryResults.innerHTML = '<div class="searchable-empty">No accessory "' + escapeHtml(q) + '" in stock</div>';
   } else {
-    // Existing customer selected — check if they have a Ghana Card
-    var select = document.getElementById("customerSelect");
-    var opt = select && select.options[select.selectedIndex];
-    var card = opt ? (opt.getAttribute("data-ghana-card") || "").trim() : "";
-    if (!card && select.value) {
-      if (warnDiv) warnDiv.style.display = "block";
-    } else {
-      if (warnDiv) warnDiv.style.display = "none";
-    }
+    accessoryResults.innerHTML = filtered.map(function (d, i) {
+      var variant = [d.storage, d.color, d.condition].filter(Boolean).join(" / ");
+      return '<div class="searchable-item" data-id="' + d.id + '" data-idx="' + i + '" ' +
+        'onmousedown="selectAccessory(' + d.id + ',\'' + escapeJs(d.model) + '\',' + (d.sale_price || 0) + ')">' +
+        '<span class="s-model">' + escapeHtml(d.model) + '</span>' +
+        '<span class="s-variant">' + escapeHtml(variant) + '</span>' +
+        '<span class="s-price">₵' + (d.sale_price || 0).toLocaleString() + '</span>' +
+        '</div>';
+    }).join("");
+  }
+  accessoryResults.classList.add("open");
+});
+
+accessorySearch.addEventListener("keydown", function (e) {
+  var items = accessoryResults.querySelectorAll(".searchable-item");
+  if (!items.length) return;
+  if (e.key === "ArrowDown") { e.preventDefault(); accHighlightIdx = Math.min(accHighlightIdx + 1, items.length - 1); updateAccHighlight(items); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); accHighlightIdx = Math.max(accHighlightIdx - 1, 0); updateAccHighlight(items); }
+  else if (e.key === "Enter") { e.preventDefault(); if (accHighlightIdx >= 0 && items[accHighlightIdx]) items[accHighlightIdx].click(); }
+  else if (e.key === "Escape") { accessoryResults.classList.remove("open"); accHighlightIdx = -1; }
+});
+
+function updateAccHighlight(items) {
+  items.forEach(function (item, i) { item.classList.toggle("highlight", i === accHighlightIdx); });
+  if (accHighlightIdx >= 0 && items[accHighlightIdx]) items[accHighlightIdx].scrollIntoView({ block: "nearest" });
+}
+
+function selectAccessory(id, model, price) {
+  accessorySearch.value = model;
+  deviceIdField.value = id;
+  accessoryResults.classList.remove("open");
+  accHighlightIdx = -1;
+  accessorySearch.style.borderColor = "#22c55e";
+  setTimeout(function () { accessorySearch.style.borderColor = ""; }, 2000);
+  selectedPendingDevice = { id: id, model: model, variant: "Accessory", imeis: "", price: price || 0, product_type: "Accessory" };
+  var infoEl = document.getElementById("selectedAccessoryInfo");
+  infoEl.style.display = "block";
+  infoEl.textContent = "From stock: " + model + " | ₵" + (price || 0).toLocaleString();
+  var priceInput = document.getElementById("cartItemPrice");
+  if (price && priceInput) {
+    priceInput.value = price;
+    priceInput.style.background = "rgba(22,163,74,0.06)";
+    setTimeout(function () { priceInput.style.background = ""; }, 1500);
+  }
+  document.getElementById("cartItemDiscount").value = "0";
+  document.getElementById("addToCartBtn").focus();
+}
+
+/* ═════════════════════════════════════════════════
+   CART MANAGEMENT
+   ═════════════════════════════════════════════════ */
+function addToCart() {
+  var dev = selectedPendingDevice;
+  if (!dev) {
+    alert("Search and select a device first.");
+    return;
+  }
+  var price = parseFloat(document.getElementById("cartItemPrice").value) || 0;
+  var discount = parseFloat(document.getElementById("cartItemDiscount").value) || 0;
+  if (price <= 0) {
+    alert("Enter a price for this item.");
+    document.getElementById("cartItemPrice").focus();
+    return;
+  }
+  // Check not already in cart — only block phones (unique items with IMEI)
+  // Accessories can be added multiple times (e.g. 3 chargers, 2 cases)
+  if (dev.product_type !== "Accessory" && cart.some(function(c) { return c.device_id === dev.id; })) {
+    alert(dev.model + " is already in the cart.");
+    return;
+  }
+  var qty = parseInt(document.getElementById("cartItemQty").value) || 1;
+  if (qty < 1) qty = 1;
+  // Phones are unique (IMEI-tagged) — always qty 1
+  if (dev.product_type !== "Accessory") qty = 1;
+  cart.push({
+    device_id: dev.id,
+    model: dev.model,
+    variant: dev.variant,
+    imeis: dev.imeis,
+    unit_price: price,
+    discount: discount,
+    quantity: qty
+  });
+  renderCart();
+  // Reset selection
+  selectedPendingDevice = null;
+  deviceSearch.value = "";
+  accessorySearch.value = "";
+  deviceIdField.value = "";
+  document.getElementById("cartItemPrice").value = "";
+  document.getElementById("cartItemDiscount").value = "0";
+  document.getElementById("cartItemQty").value = "1";
+  document.getElementById("selectedDeviceImei").style.display = "none";
+  document.getElementById("selectedAccessoryInfo").style.display = "none";
+  if (document.getElementById("productTypeHidden").value === "Phone") {
+    deviceSearch.focus();
+  } else {
+    accessorySearch.focus();
   }
 }
 
-// ─── FORM SUBMIT VALIDATION ───
-document.querySelector("form").addEventListener("submit", function (e) {
-  // 1. Ghana Card required for installment
-  if (isInstallmentSaleType()) {
-    var newFieldsOpen = document.getElementById("newCustomerFields").style.display !== "none";
-    var ghanaCard = "";
+function removeFromCart(index) {
+  cart.splice(index, 1);
+  renderCart();
+}
 
-    if (newFieldsOpen) {
-      ghanaCard = (document.getElementById("ghanaCardNew") || {}).value || "";
-    } else {
-      var select = document.getElementById("customerSelect");
-      var opt = select && select.options[select.selectedIndex];
-      var existingCard = opt ? (opt.getAttribute("data-ghana-card") || "").trim() : "";
-      if (existingCard) { /* ok */ }
-      else { ghanaCard = (document.getElementById("ghanaCardExisting") || {}).value || ""; }
-    }
-
-    if (!String(ghanaCard).trim()) {
-      e.preventDefault();
-      alert("Ghana Card is required for installment.\n\nEnter the customer's Ghana Card number.");
-      var field = document.getElementById("ghanaCardNew") || document.getElementById("ghanaCardExisting");
-      if (field) field.focus();
-      return;
-    }
+function updateCartQty(index, newQty) {
+  var q = parseInt(newQty) || 1;
+  if (q < 1) q = 1;
+  // Phones are unique — lock to 1
+  if (cart[index] && typeof cart[index].product_type === 'undefined') {
+    // detect if phone by checking if imeis exists
+    if (cart[index].imeis) q = 1;
   }
+  cart[index].quantity = q;
+  renderCart();
+}
 
-  // 2. No device selected
-  if (!document.getElementById("deviceIdField").value) {
-    e.preventDefault();
-    alert("Select a device from stock first. Search by model, storage, or IMEI.");
-    document.getElementById("deviceSearch").focus();
+function renderCart() {
+  var cartSection = document.getElementById("cartSection");
+  var cartEmpty = document.getElementById("cartEmpty");
+  var cartBody = document.getElementById("cartBody");
+  var hiddenFields = document.getElementById("cartHiddenFields");
+
+  if (cart.length === 0) {
+    cartSection.style.display = "none";
+    cartEmpty.style.display = "block";
     return;
   }
 
-  // 3. Price below device price with no discount
-  var priceVal = parseFloat(document.getElementById("salePriceInput").value) || 0;
-  var discountVal = parseFloat(document.getElementById("discountInput").value) || 0;
-  if (selectedDevicePrice && priceVal < selectedDevicePrice && discountVal === 0) {
-    var diff = selectedDevicePrice - priceVal;
-    if (!confirm("Price is below device price.\n\nDid you mean \u20B5" + diff.toLocaleString() + " as Discount?\n\nOK = continue, Cancel = fix it.")) {
-      e.preventDefault();
-      document.getElementById("discountInput").focus();
-      return;
-    }
+  cartSection.style.display = "block";
+  cartEmpty.style.display = "none";
+  document.getElementById("cartCount").textContent = cart.length;
+
+  var rows = "";
+  var hiddenHtml = "";
+  var totalPrice = 0;
+  var totalDiscount = 0;
+  var totalItems = 0;
+
+  for (var i = 0; i < cart.length; i++) {
+    var item = cart[i];
+    var qty = item.quantity || 1;
+    var linePrice = item.unit_price * qty;
+    var subtotal = linePrice - item.discount;
+    totalPrice += linePrice;
+    totalDiscount += item.discount;
+    totalItems += qty;
+    rows += '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><b>' + escapeHtml(item.model) + '</b></td>' +
+      '<td style="font-size:12px;color:var(--muted);">' + escapeHtml(item.variant) + (item.imeis ? '<br>IMEI: ' + escapeHtml(item.imeis) : '') + '</td>' +
+      '<td><input type="number" class="qty-input" value="' + qty + '" min="1" data-cart-index="' + i + '" style="width:55px;text-align:center;" onchange="updateCartQty(' + i + ', this.value)" /></td>' +
+      '<td>₵' + item.unit_price.toLocaleString() + '</td>' +
+      '<td>' + (item.discount > 0 ? '<span style="color:#dc2626;">₵' + item.discount.toLocaleString() + '</span>' : '0') + '</td>' +
+      '<td style="font-weight:600;color:#16a34a;">₵' + subtotal.toLocaleString() + '</td>' +
+      '<td><button type="button" class="btn secondary small" onclick="removeFromCart(' + i + ')" style="color:#dc2626;border-color:#dc2626;">✕</button></td>' +
+      '</tr>';
+    hiddenHtml += '<input type="hidden" name="devices" value="' + item.device_id + '" />' +
+      '<input type="hidden" name="prices" value="' + item.unit_price + '" />' +
+      '<input type="hidden" name="item_discounts" value="' + item.discount + '" />' +
+      '<input type="hidden" name="quantities" value="' + qty + '" />';
   }
 
-  // 4. Installment with no down payment
-  if (isInstallmentSaleType()) {
-    var down = parseFloat(document.querySelector('input[name="down_payment"]').value) || 0;
-    if (down === 0 && !confirm("Down payment is \u20B50.\n\nCustomer pays nothing now. Continue?")) {
-      e.preventDefault();
-      return;
-    }
-  }
-});
+  var totalNet = totalPrice - totalDiscount;
+  cartBody.innerHTML = rows;
+  hiddenFields.innerHTML = hiddenHtml;
+  document.getElementById("cartTotalItems").textContent = totalItems + " items";
+  document.getElementById("cartTotalPrice").textContent = "₵" + totalPrice.toLocaleString();
+  document.getElementById("cartTotalDiscount").textContent = "₵" + totalDiscount.toLocaleString();
+  document.getElementById("cartTotalNet").textContent = "₵" + totalNet.toLocaleString();
+  document.getElementById("salePriceHidden").value = totalPrice;
+  document.getElementById("discountHidden").value = totalDiscount;
+}
 
-// ─── CUSTOMER / DEALER TABS ───
+/* ═════════════════════════════════════════════════
+   CUSTOMER / DEALER TABS
+   ═════════════════════════════════════════════════ */
 function switchSaleTab(type) {
   document.getElementById("tabCustomerBtn").className = "btn" + (type === "Customer" ? "" : " secondary");
   document.getElementById("tabDealerBtn").className = "btn" + (type === "Dealer" ? "" : " secondary");
 
-  // Filter customer dropdown
   var select = document.getElementById("customerSelect");
   var opts = select.options;
   for (var i = 0; i < opts.length; i++) {
     var dt = opts[i].getAttribute("data-type");
-    if (i === 0) { opts[i].style.display = ""; continue; } // placeholder
-    if (type === "Customer") {
-      opts[i].style.display = (!dt || dt === "Customer") ? "" : "none";
-    } else {
-      opts[i].style.display = dt === "Dealer" ? "" : "none";
-    }
+    if (i === 0) { opts[i].style.display = ""; continue; }
+    opts[i].hidden = !((type === "Customer") ? (!dt || dt === "Customer") : (dt === "Dealer"));
   }
 
-  // Pre-set new customer type field
   document.getElementById("customerTypeField").value = type;
   document.getElementById("newCustomerLabel").textContent = type;
 
-  // If "+ New" is open, update dealer fields visibility
   if (document.getElementById("newCustomerFields").style.display !== "none") {
-    document.getElementById("dealerInlineFields").style.display = type === "Dealer" ? "block" : "none";
+    updateIdHeldSection();
   }
 
-  // Clear selection
   select.value = "";
   document.getElementById("customerIdField").value = "";
-
   localStorage.setItem("new_sale_tab", type);
 }
 
-// ─── NEW CUSTOMER TOGGLE ───
+/* ═════════════════════════════════════════════════
+   NEW CUSTOMER TOGGLE
+   ═════════════════════════════════════════════════ */
 function toggleNewCustomer() {
   var fields = document.getElementById("newCustomerFields");
   var select = document.getElementById("customerSelect");
@@ -484,10 +689,7 @@ function toggleNewCustomer() {
     flag.value = "on";
     toggle.textContent = "Cancel";
     nameField.focus();
-
-    // Sync dealer fields based on active tab
-    var activeType = document.getElementById("customerTypeField").value;
-    document.getElementById("dealerInlineFields").style.display = activeType === "Dealer" ? "block" : "none";
+    updateIdHeldSection();
   } else {
     fields.style.display = "none";
     select.disabled = false;
@@ -495,21 +697,174 @@ function toggleNewCustomer() {
     toggle.textContent = "+ New";
     nameField.value = "";
     phoneField.value = "";
+    document.getElementById("idHeldSection").style.display = "none";
   }
-  checkGhanaCardRequirement();
 }
 
 function onCustomerChange() {
   var select = document.getElementById("customerSelect");
   var hiddenId = document.getElementById("customerIdField");
   hiddenId.value = select.value;
-  checkGhanaCardRequirement();
+  updateIdHeldSection();
 }
 
-// ─── INIT ───
+function updateIdHeldSection() {
+  var isInstallment = document.getElementById("saleTypeHidden").value === "Installment" || document.getElementById("saleTypeHidden").value === "SwapInstallment";
+  var isNewOpen = document.getElementById("newCustomerFields").style.display !== "none";
+  var activeType = document.getElementById("customerTypeField").value;
+  document.getElementById("idHeldSection").style.display = (isInstallment && isNewOpen && activeType === "Dealer") ? "block" : "none";
+}
+
+/* ═════════════════════════════════════════════════
+   SUBMIT VALIDATION
+   ═════════════════════════════════════════════════ */
+document.querySelector("form").addEventListener("submit", function (e) {
+  // Sync all cart qty inputs back to cart BEFORE submission
+  // (fixes bug where onchange hasn't fired yet if user types qty then clicks Submit immediately)
+  var qtyInputs = document.querySelectorAll(".qty-input");
+  for (var qi = 0; qi < qtyInputs.length; qi++) {
+    var idx = parseInt(qtyInputs[qi].getAttribute("data-cart-index"));
+    var q = parseInt(qtyInputs[qi].value) || 1;
+    if (q < 1) q = 1;
+    if (cart[idx] && cart[idx].imeis) q = 1; // phones locked to 1
+    cart[idx].quantity = q;
+  }
+  renderCart(); // rebuild hidden fields with corrected quantities
+
+  var saleType = document.getElementById("saleTypeHidden").value;
+  var isInstallment = saleType === "Installment" || saleType === "SwapInstallment";
+  var isSwap = saleType === "SwapFull" || saleType === "SwapInstallment";
+
+  // Ghana Card for installment
+  if (isInstallment) {
+    var ghanaCard = document.getElementById("ghanaCardUnified").value.trim();
+    if (!ghanaCard) {
+      e.preventDefault();
+      alert("Ghana Card is required for installment sales.");
+      document.getElementById("ghanaCardUnified").focus();
+      return;
+    }
+  }
+
+  // Cart must have items
+  if (cart.length === 0) {
+    e.preventDefault();
+    alert("Add at least one device to the cart.");
+    document.getElementById("deviceSearch").focus();
+    return;
+  }
+
+  // Device ID for backward compat
+  document.getElementById("deviceIdField").value = cart[0].device_id;
+
+  // Installment with no down payment
+  if (isInstallment) {
+    var down = parseFloat(document.querySelector('input[name="down_payment"]').value) || 0;
+    if (down === 0 && !confirm("Down payment is \u20B50.\n\nCustomer pays nothing now. Continue?")) {
+      e.preventDefault();
+      return;
+    }
+  }
+});
+
+/* ═════════════════════════════════════════════════
+   INIT
+   ═════════════════════════════════════════════════ */
 onCustomerChange();
 var lastTab = localStorage.getItem("new_sale_tab") || "Customer";
 switchSaleTab(lastTab);
+
+/* ═════════════════════════════════════════════════
+   FORM RECOVERY — pre-fill after validation error
+   ═════════════════════════════════════════════════ */
+<% if (locals.form) { %>
+(function() {
+  var f = <%- JSON.stringify(locals.form) %>;
+
+  // Sale type
+  if (f.sale_type) {
+    var saleBtn = document.querySelector('.sale-type-btn[data-type="' + f.sale_type + '"]');
+    if (saleBtn) pickSaleType(f.sale_type, saleBtn);
+  }
+
+  // Product type
+  if (f.product_type) {
+    var ptypeBtn = document.querySelector('.product-type-btn[data-ptype="' + f.product_type + '"]');
+    if (ptypeBtn) pickProductType(f.product_type, ptypeBtn);
+  }
+
+  // OS
+  if (f.device_os) {
+    var osBtn = document.querySelector('.os-btn[data-os="' + f.device_os + '"]');
+    if (osBtn) pickOS(f.device_os, osBtn);
+  }
+
+  // Device — restore search text if we have the device
+  if (f.device_id) {
+    var dev = allDevices.find(function(d) { return d.id === f.device_id; });
+    if (dev) {
+      var variant = [dev.storage, dev.color, dev.condition].filter(Boolean).join(" / ");
+      selectDevice(dev.id, dev.model + " " + variant + " " + (dev.imeis||""));
+    }
+  }
+
+  // Customer — existing selection
+  if (f.customer_id && !f.create_customer) {
+    var sel = document.getElementById("customerSelect");
+    sel.value = f.customer_id;
+    onCustomerChange();
+  }
+
+  // Customer — new customer fields
+  if (f.create_customer) {
+    if (f.customer_type) {
+      var tab = f.customer_type; // Customer or Dealer
+      switchSaleTab(tab);
+    }
+    document.getElementById("newCustomerFields").style.display = "block";
+    document.getElementById("customerSelect").disabled = true;
+    document.getElementById("createCustomerFlag").value = "on";
+    document.getElementById("newCustomerToggle").textContent = "Cancel";
+    document.getElementById("customerNameField").value = f.customer_name || "";
+    document.getElementById("customerPhoneField").value = f.customer_phone || "";
+    document.querySelector('input[name="customer_address"]').value = f.customer_address || "";
+    // Ghana Card
+    var gcu = document.getElementById("ghanaCardUnified");
+    if (gcu && f.ghana_card) gcu.value = f.ghana_card;
+    // ID held
+    if (f.id_held) document.querySelector('input[name="id_held"]').checked = true;
+    updateIdHeldSection();
+  }
+
+  // Ghana Card (unified field — also for existing customer)
+  if (f.ghana_card && !f.create_customer) {
+    var gcu2 = document.getElementById("ghanaCardUnified");
+    if (gcu2) gcu2.value = f.ghana_card;
+  }
+
+  // Prices
+  document.getElementById("salePriceHidden").value = f.sale_price || "0";
+  document.getElementById("discountHidden").value = f.discount || "0";
+  if (f.down_payment) document.querySelector('input[name="down_payment"]').value = f.down_payment;
+  if (f.payment_method) document.querySelector('select[name="payment_method"]').value = f.payment_method;
+  if (f.cart && f.cart.length > 0) {
+    cart = f.cart;
+    renderCart();
+  }
+
+  // Trade-in
+  if (f.trade_model) document.querySelector('input[name="trade_model"]').value = f.trade_model;
+  if (f.trade_storage) document.querySelector('input[name="trade_storage"]').value = f.trade_storage;
+  if (f.trade_color) document.querySelector('input[name="trade_color"]').value = f.trade_color;
+  if (f.trade_condition) document.querySelector('select[name="trade_condition"]').value = f.trade_condition;
+  if (f.trade_in_value) document.querySelector('input[name="trade_in_value"]').value = f.trade_in_value;
+  if (f.trade_imei1) document.querySelector('input[name="trade_imei1"]').value = f.trade_imei1;
+  if (f.trade_imei2) document.querySelector('input[name="trade_imei2"]').value = f.trade_imei2;
+})();
+<% } else { %>
+// Default: Full payment + Phone visible
+pickSaleType("Full", document.querySelector('.sale-type-btn[data-type="Full"]'));
+<% } %>
 </script>
 
 <%- include("../partials/foot") %>

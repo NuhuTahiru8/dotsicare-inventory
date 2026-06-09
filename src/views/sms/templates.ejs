@@ -12,7 +12,6 @@
       <th>ID</th>
       <th>Name</th>
       <th>Body</th>
-      <th>Active</th>
       <th></th>
     </tr>
   </thead>
@@ -22,12 +21,17 @@
         <td><%= t.id %></td>
         <td><%= t.name %></td>
         <td class="mono"><%= t.body %></td>
-        <td><span class="pill <%= t.active ? "ok" : "muted" %>"><%= t.active ? "Yes" : "No" %></span></td>
         <td>
-          <form method="post" action="/sms/templates/<%= t.id %>/toggle">
-            <button class="btn small secondary" type="submit"><%= t.active ? "Disable" : "Enable" %></button>
+          <a class="btn small" href="/sms?template_id=<%= t.id %>">Use</a>
+          <form method="post" action="/sms/templates/<%= t.id %>/delete" style="display:inline" onsubmit="return confirm('Delete this template?')">
+            <button class="btn small danger" type="submit">Delete</button>
           </form>
         </td>
+      </tr>
+    <% } %>
+    <% if (templates.length === 0) { %>
+      <tr>
+        <td colspan="4" style="text-align:center;padding:40px;color:#9ca3af;">No SMS templates yet. Create them from the SMS Center page.</td>
       </tr>
     <% } %>
   </tbody>

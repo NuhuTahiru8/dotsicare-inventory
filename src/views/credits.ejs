@@ -1,19 +1,139 @@
-<%- include("partials/head", { title: "Buy SMS Credits" }) %>
+<%- include("partials/head", { title: "SMS Credits" }) %>
 <%- include("partials/nav") %>
 
-<div style="max-width:500px;margin:40px auto;padding:20px;">
+<div style="max-width:600px;margin:40px auto;padding:20px;">
   <div style="text-align:center;margin-bottom:24px;">
     <img src="/public/logo.png" alt="DOT'S iCARE" style="width:80px;height:80px;border-radius:16px;">
   </div>
-  <h1 style="text-align:center;">Buy SMS Credits</h1>
-  <p style="text-align:center;color:#666;margin-bottom:24px;">Top up your account to send SMS to your customers.</p>
+  <h1 style="text-align:center;">SMS Credits</h1>
 
   <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-radius:16px;padding:24px;margin-bottom:24px;text-align:center;">
-    <div style="font-size:14px;opacity:0.9;">Current Balance</div>
+    <div style="font-size:14px;opacity:0.9;">Your Balance</div>
     <div style="font-size:40px;font-weight:bold;"><%= locals.smsCredits || 0 %></div>
     <div style="font-size:14px;opacity:0.8;">SMS Credits</div>
   </div>
 
+  <% if (locals.isAdmin) { %>
+
+  <!-- ═══════════ ADMIN VIEW ═══════════ -->
+
+  <!-- Pending Requests from Employees -->
+  <% if (locals.pendingRequests && pendingRequests.length > 0) { %>
+  <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:16px;padding:24px;margin-bottom:24px;">
+    <h3 style="margin:0 0 4px;font-size:16px;color:#92400e;">🔔 Pending Airtime Requests</h3>
+    <p style="color:#a16207;font-size:13px;margin:0 0 16px;">Employees are waiting for credits. Assign them below.</p>
+    <% pendingRequests.forEach(function(r) { %>
+      <div id="req-<%= r.id %>" style="background:#fff;border:1px solid #fcd34d;border-radius:12px;padding:16px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div>
+            <strong style="font-size:15px;"><%= r.user_name %></strong>
+            <span style="color:#999;font-size:12px;margin-left:8px;"><%= r.created_at %></span>
+            <% if (r.amount) { %>
+              <span style="display:block;font-size:13px;color:#666;margin-top:2px;">Requested: <strong><%= r.amount %></strong> credits</span>
+            <% } else { %>
+              <span style="display:block;font-size:13px;color:#f59e0b;margin-top:2px;">Needs airtime (no amount specified)</span>
+            <% } %>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="number" id="amount-<%= r.id %>" min="1" value="<%= r.amount || 50 %>" 
+                   style="width:80px;padding:8px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;" placeholder="Credits">
+            <button onclick="fulfillRequest(<%= r.id %>, <%= r.user_id %>, '<%= r.user_name.replace(/'/g, "\\'") %>')" 
+                    style="padding:8px 18px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+              Assign Credits
+            </button>
+          </div>
+        </div>
+        <div id="fulfillMsg-<%= r.id %>" style="margin-top:8px;padding:8px;border-radius:8px;display:none;"></div>
+      </div>
+    <% }); %>
+  </div>
+  <% } else { %>
+  <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:16px;margin-bottom:24px;text-align:center;">
+    <p style="color:#166534;margin:0;font-size:14px;">✅ No pending airtime requests. All good!</p>
+  </div>
+  <% } %>
+
+  <!-- Admin: Top Up Any User -->
+  <div id="adminTopup" style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;margin-bottom:24px;">
+    <h3 style="margin:0 0 4px;font-size:16px;">Top Up User Credits</h3>
+    <p style="color:#666;font-size:13px;margin:0 0 16px;">Add SMS credits to any user account</p>
+    <form id="topupForm" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+      <div style="flex:1;min-width:180px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">User</label>
+        <select name="user_id" required style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+          <option value="">Select user...</option>
+          <% (locals.allUsers || []).forEach(function(u) { %>
+            <option value="<%= u.id %>"><%= u.name %> (<%= u.sms_credits || 0 %> credits)</option>
+          <% }) %>
+        </select>
+      </div>
+      <div style="width:120px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Amount</label>
+        <input type="number" name="amount" min="1" required placeholder="e.g. 100" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+      </div>
+      <button type="submit" style="padding:10px 24px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Add Credits</button>
+    </form>
+    <div id="topupMsg" style="margin-top:12px;padding:10px;border-radius:8px;display:none;"></div>
+  </div>
+
+  <% } else { %>
+
+  <!-- ═══════════ EMPLOYEE VIEW ═══════════ -->
+
+  <!-- Request Airtime Button -->
+  <div id="requestSection" style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;margin-bottom:24px;">
+    <h3 style="margin:0 0 4px;font-size:16px;">Need Airtime?</h3>
+    <p style="color:#666;font-size:13px;margin:0 0 16px;">Request SMS credits from your admin. They will be notified.</p>
+    <form id="requestForm" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+      <div style="width:120px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Amount (optional)</label>
+        <input type="number" name="amount" min="1" placeholder="e.g. 50" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+      </div>
+      <button type="submit" id="requestBtn" style="padding:10px 24px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+        📩 Request Airtime
+      </button>
+    </form>
+    <div id="requestMsg" style="margin-top:12px;padding:10px;border-radius:8px;display:none;"></div>
+  </div>
+
+  <!-- Employee: My Requests -->
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;margin-bottom:24px;">
+    <h3 style="margin:0 0 12px;font-size:16px;">My Requests</h3>
+    <% if (locals.pendingRequests && pendingRequests.length > 0) { %>
+      <% pendingRequests.forEach(function(r) { %>
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <span style="font-size:14px;">
+              <% if (r.status === 'pending') { %>
+                ⏳ <strong style="color:#d97706;">Pending</strong>
+              <% } else if (r.status === 'fulfilled') { %>
+                ✅ <strong style="color:#16a34a;">Fulfilled</strong>
+              <% } else { %>
+                ❌ <strong style="color:#dc2626;"><%= r.status %></strong>
+              <% } %>
+            </span>
+            <span style="color:#999;font-size:12px;margin-left:8px;"><%= r.created_at %></span>
+          </div>
+          <div>
+            <% if (r.amount) { %>
+              <span style="font-weight:600;font-size:14px;"><%= r.amount %> credits</span>
+            <% } else { %>
+              <span style="color:#999;font-size:13px;">—</span>
+            <% } %>
+            <% if (r.fulfilled_at) { %>
+              <span style="display:block;font-size:11px;color:#999;">on <%= r.fulfilled_at %></span>
+            <% } %>
+          </div>
+        </div>
+      <% }); %>
+    <% } else { %>
+      <p style="color:#999;font-size:13px;text-align:center;margin:0;">You haven't made any requests yet.</p>
+    <% } %>
+  </div>
+
+  <% } %>
+
+  <% if (locals.isAdmin) { %>
   <a href="<%= "https://sms.ayisun.com/index.html?mode=subscription&ref=doticare_" + (locals.userName || "Boss") %>" target="_blank" 
      style="display:block;width:100%;padding:18px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;border-radius:16px;font-size:18px;font-weight:700;text-align:center;text-decoration:none;box-shadow:0 4px 16px rgba(34,197,94,0.4);transition:all .3s;"
      onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
@@ -24,6 +144,7 @@
     You will be redirected to our secure payment page.<br>
     Credits are shared between all your DOT'S iCARE services.
   </p>
+  <% } %>
 
   <div style="margin-top:24px;padding:16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;">
     <h4 style="margin:0 0 8px;color:#0369a1;">Available Plans</h4>
@@ -33,5 +154,129 @@
     </div>
   </div>
 </div>
+
+<script>
+// ── Admin: Top Up Form ──
+document.addEventListener('DOMContentLoaded', function() {
+  var topupForm = document.getElementById('topupForm');
+  if (topupForm) {
+    topupForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var form = e.target;
+      var body = JSON.stringify({ user_id: form.user_id.value, amount: Number(form.amount.value) });
+      fetch('/credits/topup', { method:'POST', headers:{'Content-Type':'application/json'}, body:body })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var msg = document.getElementById('topupMsg');
+          if (data.status === 'success') {
+            msg.style.display = 'block';
+            msg.style.background = '#dcfce7';
+            msg.style.border = '1px solid #86efac';
+            msg.style.color = '#166534';
+            msg.textContent = '✅ Added ' + data.credits_added + ' credits to ' + data.user + '. New balance: ' + data.new_balance + '. Your remaining: ' + (data.admin_remaining || 0) + ' credits.';
+            form.reset();
+          } else {
+            msg.style.display = 'block';
+            msg.style.background = '#fee2e2';
+            msg.style.border = '1px solid #fca5a5';
+            msg.style.color = '#991b1b';
+            msg.textContent = 'Error: ' + (data.message || 'Unknown error');
+          }
+        })
+        .catch(function() {
+          var msg = document.getElementById('topupMsg');
+          msg.style.display = 'block';
+          msg.style.background = '#fee2e2';
+          msg.style.border = '1px solid #fca5a5';
+          msg.style.color = '#991b1b';
+          msg.textContent = 'Network error. Please try again.';
+        });
+    });
+  }
+
+  // ── Employee: Request Airtime Form ──
+  var requestForm = document.getElementById('requestForm');
+  if (requestForm) {
+    requestForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var btn = document.getElementById('requestBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      var body = JSON.stringify({ amount: Number(requestForm.amount.value) || 0 });
+      fetch('/credits/request', { method:'POST', headers:{'Content-Type':'application/json'}, body:body })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var msg = document.getElementById('requestMsg');
+          msg.style.display = 'block';
+          if (data.status === 'success') {
+            msg.style.background = '#dcfce7';
+            msg.style.border = '1px solid #86efac';
+            msg.style.color = '#166534';
+            msg.textContent = data.message;
+            requestForm.reset();
+            btn.textContent = '✅ Request Sent!';
+          } else {
+            msg.style.background = '#fee2e2';
+            msg.style.border = '1px solid #fca5a5';
+            msg.style.color = '#991b1b';
+            msg.textContent = data.message || 'Something went wrong.';
+            btn.disabled = false;
+            btn.textContent = '📩 Request Airtime';
+          }
+        })
+        .catch(function() {
+          var msg = document.getElementById('requestMsg');
+          msg.style.display = 'block';
+          msg.style.background = '#fee2e2';
+          msg.style.border = '1px solid #fca5a5';
+          msg.style.color = '#991b1b';
+          msg.textContent = 'Network error. Please try again.';
+          btn.disabled = false;
+          btn.textContent = '📩 Request Airtime';
+        });
+    });
+  }
+});
+
+// ── Admin: Fulfill a pending request ──
+function fulfillRequest(requestId, userId, userName) {
+  var amountInput = document.getElementById('amount-' + requestId);
+  var amount = Number(amountInput.value) || 50;
+  var body = JSON.stringify({ user_id: userId, amount: amount });
+  
+  fetch('/credits/fulfill/' + requestId, { method:'POST', headers:{'Content-Type':'application/json'}, body:body })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var msg = document.getElementById('fulfillMsg-' + requestId);
+      if (data.status === 'success') {
+        msg.style.display = 'block';
+        msg.style.background = '#dcfce7';
+        msg.style.border = '1px solid #86efac';
+        msg.style.color = '#166534';
+        msg.textContent = '✅ Assigned ' + data.credits_added + ' credits to ' + data.user + '. New balance: ' + data.new_balance + '. Your remaining: ' + (data.admin_remaining || 0) + ' credits.';
+        // Fade out the request card after 2 seconds
+        setTimeout(function() {
+          var card = document.getElementById('req-' + requestId);
+          if (card) { card.style.opacity = '0'; card.style.transition = 'opacity 0.5s'; }
+          setTimeout(function() { if (card) card.remove(); }, 500);
+        }, 2000);
+      } else {
+        msg.style.display = 'block';
+        msg.style.background = '#fee2e2';
+        msg.style.border = '1px solid #fca5a5';
+        msg.style.color = '#991b1b';
+        msg.textContent = 'Error: ' + (data.message || 'Unknown error');
+      }
+    })
+    .catch(function() {
+      var msg = document.getElementById('fulfillMsg-' + requestId);
+      msg.style.display = 'block';
+      msg.style.background = '#fee2e2';
+      msg.style.border = '1px solid #fca5a5';
+      msg.style.color = '#991b1b';
+      msg.textContent = 'Network error. Please try again.';
+    });
+}
+</script>
 
 <%- include("partials/foot") %>

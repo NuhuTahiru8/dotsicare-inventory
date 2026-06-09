@@ -3,77 +3,57 @@
 
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
   <h1 style="margin:0;">Inventory</h1>
-  <a class="btn btn-primary" href="/inventory/new">+ Add Stock</a>
+  <% if (currentUser && currentUser.role === 'Admin') { %>
+  <div style="display:flex;gap:8px;">
+    <a class="btn btn-primary" href="/inventory/new">+ Add Stock</a>
+    <a class="btn" href="/admin/bulk">Bulk Stock</a>
+    <a class="btn btn-primary" href="/inventory/accessory/new" style="background:#8b5cf6;border-color:#7c3aed;">+ Add Accessory</a>
+    <a class="btn" style="background:#059669;color:#fff;" href="/inventory/export">📥 Export CSV</a>
+  </div>
+  <% } %>
 </div>
 
+<% if (message) { %>
+  <div class="pill ok"><%= message %></div>
+<% } %>
+
+<!-- CLICKABLE IN STOCK / SOLD CARDS -->
+<div class="cards" style="margin-bottom:20px;">
+  <div class="card" id="cardInStock" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #22c55e;">
+    <div class="card-title" style="color:#15803d;">In Stock</div>
+    <div class="card-value" id="inStockCount" style="color:#15803d;">...</div>
+    <div id="inStockBreakdown" style="display:flex;gap:12px;margin-top:6px;font-size:12px;color:#16a34a;"></div>
+  </div>
+  <div class="card" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:2px solid #ef4444;">
+    <div class="card-title" style="color:#b91c1c;">Sold</div>
+    <div class="card-value" id="soldCount" style="color:#b91c1c;">...</div>
+  </div>
+</div>
+
+<!-- FULL INVENTORY TABLE -->
 <%
   var totalStock = 0, totalSold = 0;
   var catCount = { iOS:0, Android:0, Accessory:0 };
-  var modelCount = {};
-  var soldByModel = {};
-  var allModels = {};
-  
+
   items.forEach(function(d) {
     totalStock += d.in_stock || 0;
     totalSold += d.sold || 0;
-    
+
     var cat = d.product_type === "Accessory" ? "Accessory" : (d.os || "Other");
     catCount[cat] = (catCount[cat] || 0) + (d.in_stock || 0);
-    
-    var key = d.model + " " + (d.storage||"");
-    modelCount[key] = (modelCount[key] || 0) + (d.in_stock || 0);
-    if (d.sold > 0) soldByModel[key] = (soldByModel[key] || 0) + d.sold;
-    allModels[key] = 1;
   });
-  
-  var sortedModels = Object.keys(modelCount).sort();
 %>
 
-<!-- Stock Overview Cards -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
-  <div style="background:#f0fdf4;border:2px solid #22c55e;border-radius:12px;padding:20px;text-align:center;">
-    <div style="font-size:36px;font-weight:800;color:#15803d;"><%= totalStock %></div>
-    <div style="font-size:13px;color:#16a34a;font-weight:600;">In Stock</div>
-  </div>
-  <div style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:20px;text-align:center;">
-    <div style="font-size:36px;font-weight:800;color:#b91c1c;"><%= totalSold %></div>
-    <div style="font-size:13px;color:#dc2626;font-weight:600;">Sold</div>
-  </div>
-  <div style="background:#eff6ff;border:2px solid #3b82f6;border-radius:12px;padding:20px;text-align:center;">
-    <div style="font-size:14px;color:#1d4ed8;margin-bottom:6px;font-weight:600;">By Type</div>
-    <div style="font-size:13px;color:#1e40af;line-height:1.8;">
-      iOS: <strong><%= catCount.iOS||0 %></strong><br>
-      Android: <strong><%= catCount.Android||0 %></strong><br>
-      Acc: <strong><%= catCount.Accessory||0 %></strong>
-    </div>
-  </div>
-  <div style="background:#f8fafc;border:2px solid #64748b;border-radius:12px;padding:20px;text-align:center;">
-    <div style="font-size:14px;color:#475569;margin-bottom:6px;font-weight:600;">Models</div>
-    <div style="font-size:28px;font-weight:800;color:#0f2d62;"><%= sortedModels.length %></div>
-  </div>
-</div>
-
-<!-- Per Model Breakdown -->
-<div style="margin-bottom:16px;">
-  <h3 style="color:#0f2d62;font-size:16px;margin-bottom:8px;">Per Model</h3>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;">
-    <% sortedModels.forEach(function(k) { %>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;border:1px solid #e5e7eb;">
-        <span style="font-weight:600;"><%= k %></span>
-        <span style="font-weight:800;color:#0f2d62;"><%= modelCount[k] %> <% if (soldByModel[k] > 0) { %><span style="font-size:10px;color:#ef4444;font-weight:400;"> -<%= soldByModel[k] %></span><% } %></span>
-      </div>
-    <% }); %>
-  </div>
-</div>
-
-<!-- Clean Table -->
-<table style="width:100%;border-collapse:collapse;font-size:14px;">
+<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:24px;">
   <thead>
     <tr style="border-bottom:2px solid #e5e7eb;">
       <th style="text-align:left;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Model</th>
       <th style="text-align:left;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Storage</th>
       <th style="text-align:center;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Qty</th>
       <th style="text-align:right;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Price</th>
+      <% if (currentUser && currentUser.role === 'Admin') { %>
+      <th style="text-align:center;padding:10px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;">Actions</th>
+      <% } %>
     </tr>
   </thead>
   <tbody>
@@ -89,6 +69,9 @@
           <% if (d.sold > 0) { %><span style="font-size:11px;color:#ef4444;margin-left:4px;">(-<%= d.sold %>)</span><% } %>
         </td>
         <td style="padding:10px 8px;text-align:right;font-weight:600;">&#8373;<%= Number(d.sale_price||0).toLocaleString() %></td>
+        <% if (currentUser && currentUser.role === 'Admin') { %>
+        <td style="padding:10px 8px;text-align:center;"><a href="/inventory/<%= d.id %>/edit" class="btn small" style="background:#3b82f6;color:#fff;padding:4px 12px;font-size:12px;">Edit</a></td>
+        <% } %>
       </tr>
     <% }); %>
   </tbody>
@@ -97,3 +80,41 @@
 <% if (items.length === 0) { %>
   <div style="text-align:center;color:#999;padding:40px;">No stock yet.</div>
 <% } %>
+
+<% if (typeof totalPages !== 'undefined' && totalPages > 1) { %>
+<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:24px;padding:16px 0;border-top:1px solid #e5e7eb;">
+  <% if (page > 1) { %><a class="btn small" href="?page=<%= page - 1 %>">← Previous</a><% } else { %><span class="btn small" style="opacity:0.4;pointer-events:none;">← Previous</span><% } %>
+  <span style="font-size:14px;color:#666;">Page <%= page %> of <%= totalPages %> (Showing <%= (page-1)*perPage+1 %>–<%= Math.min(page*perPage, totalCount) %> of <%= totalCount %>)</span>
+  <% if (page < totalPages) { %><a class="btn small" href="?page=<%= page + 1 %>">Next →</a><% } else { %><span class="btn small" style="opacity:0.4;pointer-events:none;">Next →</span><% } %>
+</div>
+<% } %>
+
+<script>
+// load summary counts for the cards
+(function() {
+  // In Stock
+  fetch("/api/dashboard/models?status=InStock").then(function(r) { return r.json(); }).then(function(rows) {
+    var total = 0, ios = 0, android = 0, acc = 0;
+    rows.forEach(function(d) {
+      total += d.cnt;
+      if (d.product_type === "Accessory") acc += d.cnt;
+      else if ((d.os||"").toLowerCase() === "android") android += d.cnt;
+      else if ((d.os||"").toLowerCase() === "ios") ios += d.cnt;
+    });
+    document.getElementById("inStockCount").textContent = total;
+    document.getElementById("inStockBreakdown").innerHTML = '<span>iOS: <strong>'+ios+'</strong></span><span>Android: <strong>'+android+'</strong></span><span>Acc: <strong>'+acc+'</strong></span>';
+    if (total < <%= lowStockThreshold %>) {
+      var badge = document.createElement("div");
+      badge.style.cssText = "margin-top:8px;font-size:11px;color:#dc2626;font-weight:600;";
+      badge.textContent = "Low stock!";
+      document.getElementById("cardInStock").appendChild(badge);
+    }
+  });
+  // Sold
+  fetch("/api/dashboard/models?status=Sold").then(function(r) { return r.json(); }).then(function(rows) {
+    var total = 0;
+    rows.forEach(function(d) { total += d.cnt; });
+    document.getElementById("soldCount").textContent = total;
+  });
+})();
+</script>

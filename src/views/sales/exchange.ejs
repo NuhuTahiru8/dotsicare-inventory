@@ -1,0 +1,184 @@
+<%- include("../partials/head", { title: "Exchange Item" }) %>
+<%- include("../partials/nav") %>
+
+<div class="row">
+  <h1>Exchange Item</h1>
+  <a class="btn secondary" href="/sales/<%= sale.id %>">Back to Sale</a>
+</div>
+
+<% if (error) { %>
+  <div class="alert"><%= error %></div>
+<% } %>
+
+<!-- ── Returned Item Info ── -->
+<div class="panel">
+  <h2>Returned Item</h2>
+  <dl class="dl">
+    <div><dt>Sale</dt><dd><a href="/sales/<%= sale.id %>"><%= sale.invoice_no %></a></dd></div>
+    <div><dt>Customer</dt><dd><%= sale.customer_name %> (<span class="mono"><%= sale.customer_phone %></span>)</dd></div>
+    <div><dt>Device</dt><dd><%= sale.device_model %></dd></div>
+    <div><dt>IMEI</dt><dd class="mono"><%= returnRecord.imei || "-" %></dd></div>
+    <div><dt>Refund Amount</dt><dd style="font-weight:700;color:#dc2626;">&#8373; <%= currency(returnRecord.refund_amount) %></dd></div>
+  </dl>
+</div>
+
+<!-- ── Pick Replacement Device ── -->
+<form class="form" method="post" action="/sales/<%= sale.id %>/exchange" autocomplete="off">
+  <div class="panel">
+    <h2>Pick Replacement Device</h2>
+
+    <div class="form-row" style="position:relative;">
+      <label>Search Device</label>
+      <input type="text" id="deviceSearch" class="searchable-input searchable-input--unified"
+             placeholder="Type IMEI, model, or storage..." autocomplete="off" />
+      <div class="searchable-results" id="deviceResults"></div>
+    </div>
+
+    <!-- Hidden fields for the selected device -->
+    <input type="hidden" name="device_id" id="deviceIdHidden" value="" />
+    <input type="hidden" name="sale_price" id="salePriceHidden" value="" />
+
+    <!-- Selected device display -->
+    <div id="selectedDeviceCard" style="display:none; margin-top:12px; padding:12px; background:var(--bg2); border-radius:8px; border:1px solid var(--border);">
+      <strong id="selModel">-</strong>
+      <span style="color:var(--muted); margin-left:8px;" id="selVariant"></span>
+      <span class="mono" style="color:var(--muted); margin-left:8px;" id="selImeis"></span>
+      <span style="margin-left:12px; font-weight:700; font-size:18px; color:#16a34a;" id="selPrice"></span>
+    </div>
+  </div>
+
+  <!-- ── Balance ── -->
+  <div class="panel" id="balancePanel" style="display:none;">
+    <h2>Balance</h2>
+    <div style="font-size:20px; padding:16px;">
+      <div>Refund: <strong style="color:#dc2626;">&#8373; <%= currency(returnRecord.refund_amount) %></strong></div>
+      <div>Replacement: <strong style="color:#16a34a;" id="balanceReplacement">&#8373; 0</strong></div>
+      <hr style="margin:8px 0;" />
+      <div id="balanceResult" style="font-size:22px; font-weight:700;"></div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <button class="btn ok" type="submit" id="submitBtn" disabled>Process Exchange</button>
+    <a class="btn secondary" href="/sales/<%= sale.id %>?returned=1">Cancel</a>
+  </div>
+</form>
+
+<script>
+var refundAmount = <%= returnRecord.refund_amount %>;
+var allDevices = <%- JSON.stringify(devices.map(d => ({ id: d.id, model: d.model, storage: d.storage || "", color: d.color || "", imeis: d.imeis || "", condition: d.condition, sale_price: d.sale_price || 0 }))) %>;
+
+var deviceSearch = document.getElementById("deviceSearch");
+var deviceResults = document.getElementById("deviceResults");
+var selectedCard = document.getElementById("selectedDeviceCard");
+var balancePanel = document.getElementById("balancePanel");
+var submitBtn = document.getElementById("submitBtn");
+var highlightIdx = -1;
+
+function escapeHtml(s) {
+  var d = document.createElement("div");
+  d.appendChild(document.createTextNode(s));
+  return d.innerHTML;
+}
+
+function currency(n) {
+  return n.toLocaleString("en");
+}
+
+deviceSearch.addEventListener("input", function () {
+  var q = deviceSearch.value.trim().toLowerCase();
+  highlightIdx = -1;
+  if (!q) { deviceResults.classList.remove("open"); return; }
+
+  var filtered = allDevices.filter(function(d) {
+    return (
+      d.imeis.toLowerCase().indexOf(q) >= 0 ||
+      d.model.toLowerCase().indexOf(q) >= 0 ||
+      d.storage.toLowerCase().indexOf(q) >= 0 ||
+      d.color.toLowerCase().indexOf(q) >= 0
+    );
+  });
+
+  if (filtered.length === 0) {
+    deviceResults.innerHTML = '<div class="searchable-empty">No devices match "' + escapeHtml(q) + '"</div>';
+    deviceResults.classList.add("open");
+    return;
+  }
+
+  deviceResults.innerHTML = filtered.map(function (d, idx) {
+    var variant = [d.storage, d.color, d.condition].filter(Boolean).join(" / ");
+    return '<div class="searchable-item' + (idx === 0 ? ' highlighted' : '') + '" data-id="' + d.id + '" data-idx="' + idx + '">'
+      + '<span style="font-weight:600;">' + escapeHtml(d.model) + '</span>'
+      + '<span style="color:var(--muted);margin-left:8px;">' + escapeHtml(variant) + '</span>'
+      + '<span style="color:var(--muted);margin-left:8px;" class="mono">' + escapeHtml(d.imeis || "") + '</span>'
+      + '<span style="margin-left:auto;font-weight:700;color:#16a34a;">&#8373; ' + currency(d.sale_price) + '</span>'
+      + '</div>';
+  }).join("");
+
+  deviceResults.classList.add("open");
+  highlightIdx = 0;
+});
+
+deviceSearch.addEventListener("keydown", function (e) {
+  var items = deviceResults.querySelectorAll(".searchable-item");
+  if (e.key === "ArrowDown") { e.preventDefault(); highlightIdx = Math.min(items.length - 1, highlightIdx + 1); updateHighlight(items); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); highlightIdx = Math.max(0, highlightIdx - 1); updateHighlight(items); }
+  else if (e.key === "Enter") { e.preventDefault(); if (items[highlightIdx]) selectDevice(Number(items[highlightIdx].dataset.id)); }
+  else if (e.key === "Escape") { deviceResults.classList.remove("open"); highlightIdx = -1; }
+});
+
+deviceResults.addEventListener("click", function (e) {
+  var el = e.target.closest(".searchable-item");
+  if (!el) return;
+  selectDevice(Number(el.dataset.id));
+});
+
+function updateHighlight(items) {
+  items.forEach(function (it, i) { it.classList.toggle("highlighted", i === highlightIdx); });
+}
+
+function selectDevice(id) {
+  var dev = allDevices.find(function (d) { return d.id === id; });
+  if (!dev) return;
+
+  document.getElementById("deviceIdHidden").value = dev.id;
+  var price = dev.sale_price || 0;
+  document.getElementById("salePriceHidden").value = price;
+
+  var variant = [dev.storage, dev.color, dev.condition].filter(Boolean).join(" / ");
+  document.getElementById("selModel").textContent = dev.model;
+  document.getElementById("selVariant").textContent = variant;
+  document.getElementById("selImeis").textContent = dev.imeis || "";
+  document.getElementById("selPrice").innerHTML = "&#8373; " + currency(price);
+
+  selectedCard.style.display = "block";
+  balancePanel.style.display = "block";
+  document.getElementById("balanceReplacement").innerHTML = "&#8373; " + currency(price);
+
+  var diff = refundAmount - price;
+  var resultEl = document.getElementById("balanceResult");
+  if (diff > 0) {
+    resultEl.innerHTML = 'Customer <span style="color:#16a34a;">receives &#8373; ' + currency(diff) + '</span>';
+  } else if (diff < 0) {
+    resultEl.innerHTML = 'Customer <span style="color:#dc2626;">pays &#8373; ' + currency(-diff) + '</span>';
+  } else {
+    resultEl.innerHTML = '<span style="color:var(--muted);">Even exchange — no balance</span>';
+  }
+
+  submitBtn.disabled = false;
+
+  deviceSearch.value = dev.model + " " + variant + " | " + (dev.imeis || "");
+  deviceResults.classList.remove("open");
+  highlightIdx = -1;
+}
+
+// Click outside closes results
+document.addEventListener("click", function (e) {
+  if (!deviceSearch.contains(e.target) && !deviceResults.contains(e.target)) {
+    deviceResults.classList.remove("open");
+    highlightIdx = -1;
+  }
+});
+</script>
+
+<%- include("../partials/foot") %>

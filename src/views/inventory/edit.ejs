@@ -20,7 +20,7 @@
   <div class="grid">
     <label>
       Model *
-      <input name="model" value="<%= item.model || "" %>" required />
+      <input name="model" value="<%= item.model || "" %>" required list="datalistModels" />
     </label>
     <label>
       Storage
@@ -36,6 +36,21 @@
         <option value="">Select</option>
         <option <%= item.condition === "New" ? "selected" : "" %>>New</option>
         <option <%= item.condition === "Used" ? "selected" : "" %>>Used</option>
+      </select>
+    </label>
+    <label>
+      Type
+      <select name="product_type">
+        <option value="Phone" <%= item.product_type === "Phone" ? "selected" : "" %>>Phone</option>
+        <option value="Accessory" <%= item.product_type === "Accessory" ? "selected" : "" %>>Accessory</option>
+      </select>
+    </label>
+    <label>
+      OS
+      <select name="os">
+        <option value="" <%= !item.os ? "selected" : "" %>>-</option>
+        <option value="iOS" <%= item.os === "iOS" ? "selected" : "" %>>iOS</option>
+        <option value="Android" <%= item.os === "Android" ? "selected" : "" %>>Android</option>
       </select>
     </label>
     <label>
@@ -56,10 +71,21 @@
     </label>
   </div>
 
-  <div class="form-footer">
-    <button class="btn" type="submit">Save Changes</button>
-    <span class="pill <%= item.status === "InStock" ? "ok" : "muted" %>"><%= item.status %></span>
+  <div class="form-footer" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="btn" type="submit">Save Changes</button>
+      <span class="pill <%= item.status === "InStock" ? "ok" : "muted" %>"><%= item.status %></span>
+    </div>
+    <% if (item.status === "InStock") { %>
+      <form method="post" action="/inventory/<%= item.id %>/delete" onsubmit="return confirm('Delete this stock item permanently?\n\nModel: <%= item.model %>\nIMEI: <%= item.imei1 || 'N/A' %>\n\nThis cannot be undone.');">
+        <button class="btn small danger" type="submit">Delete Item</button>
+      </form>
+    <% } %>
   </div>
+
+  <datalist id="datalistModels">
+    <% for (const m of models || []) { %><option value="<%= m %>"></option><% } %>
+  </datalist>
 </form>
 
 <%- include("../partials/foot") %>

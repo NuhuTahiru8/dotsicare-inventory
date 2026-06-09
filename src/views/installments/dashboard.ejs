@@ -3,9 +3,7 @@
 
 <div class="row">
   <h1>Installments</h1>
-  <% if (currentUser && currentUser.role === "Admin") { %>
-    <a class="btn secondary" href="/sms">Debt SMS</a>
-  <% } %>
+  <a class="btn secondary" href="/sms">Debt SMS</a>
 </div>
 
 <table class="table">
@@ -32,6 +30,11 @@
         <td><%= (i.due_date || "").slice(0, 10) %></td>
         <td><span class="pill <%= i.computed_status === "Overdue" ? "danger" : "warn" %>"><%= i.computed_status %></span></td>
         <td><a class="btn small secondary" href="/sales/<%= i.sale_id %>">Open</a></td>
+      </tr>
+    <% } %>
+    <% if (items.length === 0) { %>
+      <tr>
+        <td colspan="8" style="text-align:center;padding:40px;color:#9ca3af;">No installment plans yet. Installments are created when a sale is marked as "Installment" type.</td>
       </tr>
     <% } %>
   </tbody>
