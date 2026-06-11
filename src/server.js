@@ -1964,6 +1964,7 @@ app.post("/inventory/:id/delete", requireAdmin, (req, res) => {
     return res.redirect(`/inventory?error=${encodeURIComponent("Sold stock is linked to sales and cannot be deleted.")}`);
   }
 
+  db.prepare(`DELETE FROM device_imeis WHERE device_id = @id`).run({ id });
   db.prepare(`DELETE FROM devices WHERE id = @id AND branch = @branch`).run({ id, branch: req.branch });
   res.redirect("/inventory?deleted=1");
 });
@@ -2451,10 +2452,27 @@ app.post("/sales/new", requireAuth, (req, res) => {
         stmtTi.run({ trade_in_id: tradeInId, imei, created_at: nowIso() });
       }
 
+      // Auto-detect OS for trade-in device so it appears in sales tabs
+      var tradeOs = null;
+      if (normalizedTradeModel) {
+        var m = normalizedTradeModel.toString().toLowerCase();
+        if (m.includes("iphone") || m.includes("ipad") || m.includes("macbook") || m.includes("apple") ||
+            m === "se" || m === "se2" || m === "se3") {
+          tradeOs = "iOS";
+        } else if (m.includes("samsung") || m.includes("galaxy") || m.includes("google pixel") ||
+                   m.includes("oneplus") || m.includes("xiaomi") || m.includes("oppo") ||
+                   m.includes("vivo") || m.includes("realme") || m.includes("tecno") ||
+                   m.includes("infinix") || m.includes("nokia") || m.includes("huawei") ||
+                   m.includes("honor") || m.includes("motorola") || m.includes("sony") ||
+                   m.includes("lg ") || m.includes("htc") || m.includes("android")) {
+          tradeOs = "Android";
+        }
+      }
+
       const inv = db
         .prepare(
-          `INSERT INTO devices (branch, stock_batch_id, model, storage, color, condition, cost_price, sale_price, status, created_by_user_id, created_at)
-           VALUES (@branch, @stock_batch_id, @model, @storage, @color, @condition, @cost_price, @sale_price, 'InStock', @created_by_user_id, @created_at)`
+          `INSERT INTO devices (branch, stock_batch_id, model, storage, color, condition, cost_price, sale_price, status, created_by_user_id, created_at, os)
+           VALUES (@branch, @stock_batch_id, @model, @storage, @color, @condition, @cost_price, @sale_price, 'InStock', @created_by_user_id, @created_at, @os)`
         )
         .run({
           branch: req.branch,
@@ -2465,6 +2483,7 @@ app.post("/sales/new", requireAuth, (req, res) => {
           condition: trade_condition,
           cost_price: tradeValueInt,
           sale_price: tradeValueInt,
+          os: tradeOs,
           created_by_user_id: req.user.id,
           created_at: nowIso()
         });
