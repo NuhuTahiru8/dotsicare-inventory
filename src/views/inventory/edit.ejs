@@ -76,16 +76,17 @@
       <button class="btn" type="submit">Save Changes</button>
       <span class="pill <%= item.status === "InStock" ? "ok" : "muted" %>"><%= item.status %></span>
     </div>
-    <% if (item.status === "InStock") { %>
-      <form method="post" action="/inventory/<%= item.id %>/delete" onsubmit="return confirm('Delete this stock item permanently?\n\nModel: <%= item.model %>\nIMEI: <%= item.imei1 || 'N/A' %>\n\nThis cannot be undone.');">
-        <button class="btn small danger" type="submit">Delete Item</button>
-      </form>
-    <% } %>
   </div>
 
   <datalist id="datalistModels">
     <% for (const m of models || []) { %><option value="<%= m %>"></option><% } %>
   </datalist>
 </form>
+
+<% if (item.status === "InStock") { %>
+<form method="post" action="/inventory/<%= item.id %>/delete" onsubmit="return confirm('Delete this stock item permanently?\n\nModel: <%= item.model %>\nIMEI: <%= item.imei1 || 'N/A' %>\n\nThis cannot be undone.');" style="margin-top:12px;">
+  <button class="btn small danger" type="submit">Delete Item</button>
+</form>
+<% } %>
 
 <%- include("../partials/foot") %>
