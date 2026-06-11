@@ -1957,11 +1957,18 @@ app.post("/inventory/:id/edit", requireAdmin, (req, res) => {
 app.post("/inventory/:id/delete", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const item = db.prepare(`SELECT * FROM devices WHERE id = @id AND branch = @branch`).get({ id, branch: req.branch });
-  if (!item) return res.redirect("/inventory?error=Stock%20item%20not%20found.");
+  if (!item) return res.redirect("/inventory?error=" + encodeURIComponent("Stock item not found."));
 
   const linkedSale = db.prepare(`SELECT id FROM sales WHERE device_id = @id AND branch = @branch LIMIT 1`).get({ id, branch: req.branch });
   if (linkedSale || item.status !== "InStock") {
-    return res.redirect(`/inventory?error=${encodeURIComponent("Sold stock is linked to sales and cannot be deleted.")}`);
+    return res.render("inventory/edit", {
+      currentBranch: req.currentBranch,
+      branch: req.branch,
+      branches: allBranches(),
+      item: formatDevice(item),
+      models: distinctDeviceModels(req.branch),
+      error: "This item is linked to a sale and cannot be deleted. Only InStock items (without sales) can be removed."
+    });
   }
 
   db.prepare(`DELETE FROM device_imeis WHERE device_id = @id`).run({ id });

@@ -13,8 +13,11 @@
   <% } %>
 </div>
 
-<% if (message) { %>
-  <div class="pill ok"><%= message %></div>
+<% if (typeof error !== 'undefined' && error && error.trim()) { %>
+  <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-weight:500;">&#x26a0;&#xfe0f; <%= error %></div>
+<% } %>
+<% if (typeof query !== 'undefined' && query && query.deleted) { %>
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-weight:500;">&#x2705; Stock item deleted successfully.</div>
 <% } %>
 
 <!-- CLICKABLE IN STOCK / SOLD CARDS -->

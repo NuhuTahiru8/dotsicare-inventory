@@ -6,8 +6,13 @@
     <h1>Edit Stock</h1>
     <div class="muted">
       <%= currentBranch ? currentBranch.name + " shop" : "Current shop" %>
-      · ID <span class="mono"><%= item.id %></span>
+      &middot; ID <span class="mono"><%= item.id %></span>
     </div>
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 16px;border-radius:8px;margin-top:12px;font-weight:500;">
+        &#x26a0;&#xfe0f; <%= error %>
+      </div>
+    <% } %>
   </div>
   <a class="btn secondary" href="/inventory">Back</a>
 </div>
@@ -84,9 +89,13 @@
 </form>
 
 <% if (item.status === "InStock") { %>
-<form method="post" action="/inventory/<%= item.id %>/delete" onsubmit="return confirm('Delete this stock item permanently?\n\nModel: <%= item.model %>\nIMEI: <%= item.imei1 || 'N/A' %>\n\nThis cannot be undone.');" style="margin-top:12px;">
-  <button class="btn small danger" type="submit">Delete Item</button>
-</form>
+  <div style="margin-top:16px;padding:16px;border:2px solid #fecaca;border-radius:8px;background:#fff5f5;" id="deleteConfirmBox">
+    <p style="color:#991b1b;font-weight:600;margin:0 0 4px;">&#x26a0;&#xfe0f; Delete this item?</p>
+    <p style="color:#7f1d1d;font-size:14px;margin:0 0 8px;">Model: <strong><%= item.model %></strong> &middot; IMEI: <strong><%= item.imei1 || 'N/A' %></strong><br>This cannot be undone. Only InStock items without sales can be removed.</p>
+    <form method="post" action="/inventory/<%= item.id %>/delete">
+      <button class="btn small danger" type="submit">Confirm Delete</button>
+    </form>
+  </div>
 <% } %>
 
 <%- include("../partials/foot") %>
